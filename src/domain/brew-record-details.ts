@@ -1,0 +1,5 @@
+import type { BrewRecordDetailsInput } from "./types";
+import { brewRecordDetailsInputSchema } from "./schemas";
+export function normalizeBrewRecordDetailsInput(input: BrewRecordDetailsInput) { const parsed=brewRecordDetailsInputSchema.parse(input); const bean=parsed.bean&&Object.keys(parsed.bean).length?parsed.bean:null; const equipment=parsed.equipment&&Object.keys(parsed.equipment).length?parsed.equipment:null; const normalized={bean,equipment,actualDoseGrams:parsed.actualDoseGrams??null,actualWaterGrams:parsed.actualWaterGrams??null,actualTemperatureCelsius:parsed.actualTemperatureCelsius??null,notes:parsed.notes??null}; return Object.values(normalized).every((value)=>value===null)?null:normalized; }
+export function calculateNumericDifference(actual?:number|null,target?:number|null):number|null { return Number.isFinite(actual)&&Number.isFinite(target)?(actual as number)-(target as number):null; }
+export function formatSignedNumber(value:number|null,unit=""):string { if(!Number.isFinite(value)) return "—"; const safe=Object.is(value,-0)?0:value as number; return `${safe>0?"+":""}${Number.isInteger(safe)?safe:Number(safe.toFixed(2))}${unit}`; }

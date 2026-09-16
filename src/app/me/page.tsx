@@ -1,2 +1,4 @@
-import { PageIntro } from "@/components/page-intro";
-export default function MePage() { return <PageIntro title="Me" description="Profile、My Gear、Gear Guide、My Library、偏好與設定。" />; }
+import type { Metadata } from "next";
+import { ProfileSummary } from "@/components/profile-summary";
+export const metadata: Metadata = { title: "Me" };
+export default function MePage() { return <ProfileSummary />; }

@@ -1,0 +1,1 @@
+import type{BrewAnalysisInput,BrewAnalysisResult}from"@/domain";export interface BrewAnalysisProvider{readonly provider:string;readonly model:string;analyze(input:BrewAnalysisInput):Promise<BrewAnalysisResult>}

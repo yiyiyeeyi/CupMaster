@@ -1,0 +1,7 @@
+import { z } from "zod";
+import { suggestedBrewPlanSchema } from "@/domain";
+export const LOCAL_SUGGESTED_PLAN_VERSION=2 as const;
+export const localSuggestedPlanShapeSchema=z.object({version:z.union([z.literal(1),z.literal(2)]),data:z.object({plans:z.array(z.unknown())})});
+export const localSuggestedPlanEnvelopeSchema=z.object({version:z.literal(LOCAL_SUGGESTED_PLAN_VERSION),data:z.object({plans:z.array(suggestedBrewPlanSchema)})});
+export interface SuggestedPlanMigrationWarning{planId:string;code:"legacy_used_without_resulting_brew"|"legacy_used_without_timestamp";message:string}
+export function migrateSuggestedPlanCandidate(candidate:unknown){if(!candidate||typeof candidate!=="object")return{candidate,warnings:[] as SuggestedPlanMigrationWarning[]};const plan={...candidate}as Record<string,unknown>,warnings:SuggestedPlanMigrationWarning[]=[];const id=typeof plan.id==="string"?plan.id:"unknown";if(plan.status==="used"&&typeof plan.resultingBrewId==="string"&&plan.usedAt==null){plan.status="draft";warnings.push({planId:id,code:"legacy_used_without_timestamp",message:"Used Plan without usedAt was normalized to draft."})}if(plan.status==="used"&&plan.resultingBrewId==null){plan.status="draft";plan.usedAt=null;warnings.push({planId:id,code:"legacy_used_without_resulting_brew",message:"Used Plan without a resulting Brew was normalized to draft."})}return{candidate:plan,warnings}}

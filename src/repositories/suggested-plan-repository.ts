@@ -1,0 +1,4 @@
+import type { SuggestedBrewPlan } from "@/domain";
+export type SuggestedPlanReadResult<T>={ok:true;value:T;notice?:string}|{ok:false;value:T;message:string};
+export type SuggestedPlanWriteResult={ok:true;value:SuggestedBrewPlan}|{ok:false;message:string};
+export interface SuggestedPlanRepository{create(plan:SuggestedBrewPlan):SuggestedPlanWriteResult;getById(id:string):SuggestedPlanReadResult<SuggestedBrewPlan|null>;findByResultingBrewId(brewId:string):SuggestedPlanReadResult<SuggestedBrewPlan|null>;list():SuggestedPlanReadResult<SuggestedBrewPlan[]>;listBySourceBrewId(brewId:string):SuggestedPlanReadResult<SuggestedBrewPlan[]>;upsertMany(plans:SuggestedBrewPlan[],idPrefix:string):SuggestedPlanReadResult<SuggestedBrewPlan[]>;removeByIdPrefix(idPrefix:string):{ok:true;removed:number}|{ok:false;message:string};update(plan:SuggestedBrewPlan):SuggestedPlanWriteResult;markUsed(planId:string,resultingBrewId:string,usedAt:string):SuggestedPlanWriteResult}

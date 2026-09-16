@@ -1,0 +1,1 @@
+-- Cloud 1 intentionally ships no users, demo fixtures, or production seed data.

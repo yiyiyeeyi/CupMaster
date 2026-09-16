@@ -1,2 +1,5 @@
-import { PageIntro } from "@/components/page-intro";
-export default function DiscoverPage() { return <PageIntro title="Discover" description="找到一份有完整預設值的配方，直接準備第一杯。" />; }
+import type { Metadata } from "next";
+import { recipeService } from "@/application/recipes";
+import { DiscoverContent } from "@/components/discover-content";
+export const metadata: Metadata = { title: "Discover" };
+export default async function DiscoverPage() { const recipes = await recipeService.discover(); return <DiscoverContent recipes={recipes} />; }

@@ -1,5 +1,17 @@
 # Product Architecture
 
+Cloud 4-1 adds an authenticated Migration Review route that reads only through the fixed Local runtime bundle. It summarizes local records, reuses graph validation, and collects warnings; consent is transient UI state and does not start migration or create a checkpoint. Runtime remains Local. Cloud 4-2 will implement explicit migration; Cloud 5 will implement synchronization.
+
+Cloud 4-2 implements an explicit, retryable one-time copy with checkpoint persistence, conflict preflight, two-phase references, and remote verification. Completion still leaves product runtime Local and does not imply synchronization; Cloud 5 has not started.
+
+Cloud 3-2 adds a composition root and migration-readiness contracts without activating cloud persistence. Auth mode and repository mode are independent; runtime is a compile-time `local` literal. Local, authenticated Remote, and dependency-only Migration bundles share one construction boundary.
+
+Cloud 3-1 adds inactive async Supabase repository infrastructure beneath the existing mapper and RLS boundary. Local repositories remain wired to every use case.
+
+Cloud 2 adds an optional account boundary. A session means an account is connected, not that local Profile, Brew, Plan, or Snapshot data is synced. Local Mode retains the MVP, Auth Provider stays separate from local Profile Provider, and no root auth guard is introduced.
+
+Cloud 1 is infrastructure-only. Local repositories remain the active MVP persistence layer; Supabase clients are lazy and unused by product routes. Auth, remote repositories, migration, sync, and conflict resolution remain later cloud increments.
+
 CupMaster is an AI pour-over coach, not a recipe collection or a database that demands complete setup before brewing. The core loop is start quickly → follow the guide → save the Brew → reflect later → use a focused next plan.
 
 ## Principles

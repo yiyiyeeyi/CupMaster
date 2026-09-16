@@ -1,0 +1,8 @@
+-- Manual RLS verification plan for a disposable local stack only.
+-- 1. Create User A and User B through local Auth and capture their UUIDs.
+-- 2. SET LOCAL ROLE authenticated and set request.jwt.claim.sub to User A.
+-- 3. Verify A can SELECT/INSERT/UPDATE rows owned by A in all three tables.
+-- 4. Verify A cannot SELECT B rows, INSERT a B user_id, or reassign ownership to B.
+-- 5. SET LOCAL ROLE anon and verify SELECT/INSERT returns no rows or permission errors.
+-- 6. Verify no DELETE policy exists; hard delete is unavailable through the Data API.
+-- This file intentionally contains no real UUID, credential, or user data.

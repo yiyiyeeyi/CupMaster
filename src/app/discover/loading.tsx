@@ -1,0 +1,1 @@
+export default function DiscoverLoading() { return <main className="route-loading" aria-live="polite"><p className="eyebrow">Discover</p><h1>Finding a good place to start…</h1><div className="skeleton-card" /><div className="skeleton-card" /></main>; }

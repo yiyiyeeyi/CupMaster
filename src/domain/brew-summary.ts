@@ -1,0 +1,5 @@
+import { formatDuration } from "./brew-timer";
+export function calculateTimeDifferenceSeconds(actual: number | null | undefined, target: number | null | undefined): number | null { if (actual == null || target == null || !Number.isFinite(actual) || !Number.isFinite(target)) return null; return Math.trunc(actual - target); }
+export function calculateStageDurationDifference(actual: number | null | undefined, target: number | null | undefined): number | null { return calculateTimeDifferenceSeconds(actual, target); }
+export function formatSignedDuration(value: number | null | undefined): string { if (value == null || !Number.isFinite(value)) return "—"; const seconds = Math.trunc(value); if (seconds === 0) return "0:00"; return `${seconds > 0 ? "+" : "-"}${formatDuration(Math.abs(seconds))}`; }
+export function formatOptionalWeightDifference(actual: number | null | undefined, target: number | null | undefined): string { if (actual == null || target == null || !Number.isFinite(actual) || !Number.isFinite(target)) return "—"; const difference = actual - target; return `${difference > 0 ? "+" : ""}${difference.toFixed(1).replace(/\.0$/, "")}g`; }

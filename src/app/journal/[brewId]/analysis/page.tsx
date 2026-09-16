@@ -1,0 +1,1 @@
+import{BrewAnalysisView}from"@/components/brew-analysis-view";export default async function AnalysisPage({params}:{params:Promise<{brewId:string}>}){return <BrewAnalysisView brewId={(await params).brewId}/>}
