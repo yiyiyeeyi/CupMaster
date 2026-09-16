@@ -11,3 +11,4 @@ export * from "./suggested-plan";
 export * from "./cloud-migration";
 export * from "./migration-review";
 export * from "./migration-engine";
+export * from "./brew-runtime";
