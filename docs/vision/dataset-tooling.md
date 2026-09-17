@@ -69,7 +69,7 @@ For every positive frame:
 - `partially_occluded`: use only when the physical outlet remains locatable;
 - `not_visible`: use when it would require guessing;
 - optional Pilot audit only: `spout_neck_base` on 30–40 frames.
-- QA reference only: annotate the dripper rim as a `dripper` ellipse so disagreement can be normalized by its mean radius. This reference is not a model target.
+- QA reference only: annotate the dripper rim as a `dripper` ellipse. The normalizer uses the equal-area effective radius `sqrt(radiusX * radiusY)`, since an ellipse with radii `radiusX` and `radiusY` has the same area as a circle with that radius. This reference is not a model target.
 
 Normalize the chosen annotation-tool export into the format in `annotations.example.json`. The normalized file deliberately preserves separate passes so 10–15 Pilot frames can be re-annotated blind and compared. Tool-specific conversion should be added only after the exact CVAT export flavor/version is selected; guessing that format now would create a brittle converter.
 

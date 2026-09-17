@@ -331,6 +331,9 @@ export function validateAnnotations(manifest, annotationDocument) {
   const bboxIous = [];
   const neckDistances = [];
   const normalizedNeckDistances = [];
+  const dripperCenterDistances = [];
+  const dripperRadiusDifferences = [];
+  const relativeDripperRadiusDifferences = [];
   let doubleAnnotatedFrames = 0;
   let positiveObservations = 0;
   let missingTipObservations = 0;
@@ -361,19 +364,27 @@ export function validateAnnotations(manifest, annotationDocument) {
     const right = observations[1].annotation;
     const leftObject = left.objects[0];
     const rightObject = right.objects[0];
+    const meanDripperRadius = (left.dripper.radius + right.dripper.radius) / 2;
+    dripperCenterDistances.push(Math.hypot(left.dripper.centerX - right.dripper.centerX, left.dripper.centerY - right.dripper.centerY));
+    const dripperRadiusDifference = Math.abs(left.dripper.radius - right.dripper.radius);
+    dripperRadiusDifferences.push(dripperRadiusDifference);
+    relativeDripperRadiusDifferences.push(dripperRadiusDifference / meanDripperRadius);
     if (!leftObject || !rightObject) continue;
     if (leftObject.spoutTip?.visibility !== "not_visible" && rightObject.spoutTip?.visibility !== "not_visible") {
       const distance = pointDistance(leftObject.spoutTip, rightObject.spoutTip);
-      const radius = (left.dripper.radius + right.dripper.radius) / 2;
       tipDistances.push(distance);
-      normalizedTipDistances.push(distance / radius);
+      normalizedTipDistances.push(distance / meanDripperRadius);
     }
     bboxIous.push(bboxIou(leftObject.bbox, rightObject.bbox));
-    if (leftObject.spoutNeckBase?.visibility !== "not_visible" && rightObject.spoutNeckBase?.visibility !== "not_visible") {
+    if (
+      leftObject.spoutNeckBase
+      && rightObject.spoutNeckBase
+      && leftObject.spoutNeckBase.visibility !== "not_visible"
+      && rightObject.spoutNeckBase.visibility !== "not_visible"
+    ) {
       const distance = pointDistance(leftObject.spoutNeckBase, rightObject.spoutNeckBase);
-      const radius = (left.dripper.radius + right.dripper.radius) / 2;
       neckDistances.push(distance);
-      normalizedNeckDistances.push(distance / radius);
+      normalizedNeckDistances.push(distance / meanDripperRadius);
     }
   }
   const mean = (values) => (values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length);
@@ -412,6 +423,16 @@ export function validateAnnotations(manifest, annotationDocument) {
     missingNeckBaseObservations,
     missingNeckBaseRate: positiveObservations === 0 ? null : missingNeckBaseObservations / positiveObservations,
     negativeFalseAnnotationCount,
+    dripperComparablePairs: dripperCenterDistances.length,
+    meanDripperCenterDisagreementPx: mean(dripperCenterDistances),
+    medianDripperCenterDisagreementPx: median(dripperCenterDistances),
+    maxDripperCenterDisagreementPx: maximum(dripperCenterDistances),
+    meanDripperRadiusDisagreementPx: mean(dripperRadiusDifferences),
+    medianDripperRadiusDisagreementPx: median(dripperRadiusDifferences),
+    maxDripperRadiusDisagreementPx: maximum(dripperRadiusDifferences),
+    meanRelativeDripperRadiusDisagreement: mean(relativeDripperRadiusDifferences),
+    medianRelativeDripperRadiusDisagreement: median(relativeDripperRadiusDifferences),
+    maxRelativeDripperRadiusDisagreement: maximum(relativeDripperRadiusDifferences),
   };
   if (doubleAnnotatedFrames < Math.min(10, manifest.frames.length)) warnings.push("fewer than the required 10 pilot frames are double-annotated");
   return { errors, warnings, metrics };

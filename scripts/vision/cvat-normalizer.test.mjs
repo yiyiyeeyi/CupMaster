@@ -77,7 +77,7 @@ describe("CVAT for images 1.1 normalization", () => {
     expect(result.summary).toMatchObject({ pairedFrames: 1, negativeFalseAnnotationCount: 0 });
     expect(result.document.passes[0].annotations[0]).toMatchObject({
       frameId: "frame-positive",
-      dripper: { centerX: 540, centerY: 700, radius: 260 },
+      dripper: { centerX: 540, centerY: 700, radius: Math.sqrt(250 * 270) },
       objects: [{ class: "gooseneck_spout", spoutTip: { visibility: "visible" } }],
     });
   });

@@ -118,6 +118,9 @@ describe("vision annotation QA", () => {
       maxNeckBaseDisagreementPx: 5,
       missingNeckBaseRate: 0,
       negativeFalseAnnotationCount: 0,
+      dripperComparablePairs: 1,
+      meanDripperCenterDisagreementPx: 0,
+      meanDripperRadiusDisagreementPx: 0,
     });
     expect(result.metrics.meanBboxIou).toBeGreaterThan(0.9);
   });
@@ -141,5 +144,35 @@ describe("vision annotation QA", () => {
       }],
     });
     expect(result.errors.some((error) => error.includes("negative frame"))).toBe(true);
+  });
+
+  it("treats an omitted optional neck-base point as missing instead of crashing", () => {
+    const candidate = manifest();
+    candidate.frames = [candidate.frames[0]];
+    candidate.videos = [candidate.videos[0]];
+    candidate.sessions = [candidate.sessions[0]];
+    const annotation = {
+      frameId: "frame-a",
+      dripper: { centerX: 900, centerY: 500, radius: 100 },
+      objects: [{
+        class: "gooseneck_spout",
+        bbox: { xMin: 100, yMin: 100, xMax: 400, yMax: 300 },
+        spoutTip: { x: 300, y: 200, visibility: "visible" },
+      }],
+    };
+    const result = validateAnnotations(candidate, {
+      schemaVersion: 1,
+      datasetVersion: candidate.datasetVersion,
+      passes: [
+        { passId: "pass-1", annotations: [annotation] },
+        { passId: "pass-2", annotations: [structuredClone(annotation)] },
+      ],
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.metrics).toMatchObject({
+      neckBaseComparablePairs: 0,
+      missingNeckBaseObservations: 2,
+      missingNeckBaseRate: 1,
+    });
   });
 });

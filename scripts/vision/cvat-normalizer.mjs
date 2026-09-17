@@ -141,7 +141,7 @@ function dripperFrom(shape, errors, context) {
       errors.push(`${context} has invalid ellipse coordinates`);
       return undefined;
     }
-    return { centerX: shape.centerX, centerY: shape.centerY, radius: (shape.radiusX + shape.radiusY) / 2 };
+    return { centerX: shape.centerX, centerY: shape.centerY, radius: Math.sqrt(shape.radiusX * shape.radiusY) };
   }
   if (shape.type === "box") {
     const values = [shape.xMin, shape.yMin, shape.xMax, shape.yMax];
