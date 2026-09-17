@@ -334,13 +334,26 @@ export function validateAnnotations(manifest, annotationDocument) {
   let doubleAnnotatedFrames = 0;
   let positiveObservations = 0;
   let missingTipObservations = 0;
+  let missingNeckBaseObservations = 0;
+  let negativeFalseAnnotationCount = 0;
+  const tipVisibility = { visible: 0, partiallyOccluded: 0, notVisible: 0, missing: 0 };
   for (const [frameId, observations] of observationsByFrame) {
     const frame = frameById.get(frameId);
     for (const observation of observations) {
+      if (frame?.kind === "negative" && observation.annotation.objects.length > 0) negativeFalseAnnotationCount += 1;
       if (frame?.kind !== "positive") continue;
       positiveObservations += 1;
       const tip = observation.annotation.objects[0]?.spoutTip;
-      if (!tip || tip.visibility === "not_visible") missingTipObservations += 1;
+      if (!tip) {
+        missingTipObservations += 1;
+        tipVisibility.missing += 1;
+      } else if (tip.visibility === "not_visible") {
+        missingTipObservations += 1;
+        tipVisibility.notVisible += 1;
+      } else if (tip.visibility === "partially_occluded") tipVisibility.partiallyOccluded += 1;
+      else tipVisibility.visible += 1;
+      const neck = observation.annotation.objects[0]?.spoutNeckBase;
+      if (!neck || neck.visibility === "not_visible") missingNeckBaseObservations += 1;
     }
     if (observations.length < 2) continue;
     doubleAnnotatedFrames += 1;
@@ -364,19 +377,41 @@ export function validateAnnotations(manifest, annotationDocument) {
     }
   }
   const mean = (values) => (values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length);
+  const median = (values) => {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((left, right) => left - right);
+    const midpoint = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[midpoint - 1] + sorted[midpoint]) / 2 : sorted[midpoint];
+  };
+  const maximum = (values) => (values.length === 0 ? null : Math.max(...values));
+  const minimum = (values) => (values.length === 0 ? null : Math.min(...values));
   const metrics = {
     annotatedFrames: observationsByFrame.size,
     doubleAnnotatedFrames,
     comparableTipPairs: tipDistances.length,
     meanTipDisagreementPx: mean(tipDistances),
+    medianTipDisagreementPx: median(tipDistances),
+    maxTipDisagreementPx: maximum(tipDistances),
     meanNormalizedTipDisagreement: mean(normalizedTipDistances),
+    medianNormalizedTipDisagreement: median(normalizedTipDistances),
+    maxNormalizedTipDisagreement: maximum(normalizedTipDistances),
     meanBboxIou: mean(bboxIous),
+    medianBboxIou: median(bboxIous),
+    minBboxIou: minimum(bboxIous),
     positiveObservations,
     missingTipObservations,
     missingTipRate: positiveObservations === 0 ? null : missingTipObservations / positiveObservations,
+    tipVisibility,
     neckBaseComparablePairs: neckDistances.length,
     meanNeckBaseDisagreementPx: mean(neckDistances),
+    medianNeckBaseDisagreementPx: median(neckDistances),
+    maxNeckBaseDisagreementPx: maximum(neckDistances),
     meanNormalizedNeckBaseDisagreement: mean(normalizedNeckDistances),
+    medianNormalizedNeckBaseDisagreement: median(normalizedNeckDistances),
+    maxNormalizedNeckBaseDisagreement: maximum(normalizedNeckDistances),
+    missingNeckBaseObservations,
+    missingNeckBaseRate: positiveObservations === 0 ? null : missingNeckBaseObservations / positiveObservations,
+    negativeFalseAnnotationCount,
   };
   if (doubleAnnotatedFrames < Math.min(10, manifest.frames.length)) warnings.push("fewer than the required 10 pilot frames are double-annotated");
   return { errors, warnings, metrics };

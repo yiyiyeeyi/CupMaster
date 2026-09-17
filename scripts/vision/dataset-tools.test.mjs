@@ -109,9 +109,15 @@ describe("vision annotation QA", () => {
     expect(result.metrics).toMatchObject({
       doubleAnnotatedFrames: 1,
       meanTipDisagreementPx: 10,
+      medianTipDisagreementPx: 10,
+      maxTipDisagreementPx: 10,
       meanNormalizedTipDisagreement: 0.1,
       missingTipRate: 0,
       meanNeckBaseDisagreementPx: 5,
+      medianNeckBaseDisagreementPx: 5,
+      maxNeckBaseDisagreementPx: 5,
+      missingNeckBaseRate: 0,
+      negativeFalseAnnotationCount: 0,
     });
     expect(result.metrics.meanBboxIou).toBeGreaterThan(0.9);
   });

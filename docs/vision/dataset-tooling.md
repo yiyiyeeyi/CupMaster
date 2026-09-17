@@ -69,8 +69,22 @@ For every positive frame:
 - `partially_occluded`: use only when the physical outlet remains locatable;
 - `not_visible`: use when it would require guessing;
 - optional Pilot audit only: `spout_neck_base` on 30–40 frames.
+- QA reference only: annotate the dripper rim as a `dripper` ellipse so disagreement can be normalized by its mean radius. This reference is not a model target.
 
 Normalize the chosen annotation-tool export into the format in `annotations.example.json`. The normalized file deliberately preserves separate passes so 10–15 Pilot frames can be re-annotated blind and compared. Tool-specific conversion should be added only after the exact CVAT export flavor/version is selected; guessing that format now would create a brittle converter.
+
+For a CVAT for images 1.1 export, normalize and retain a separate QA report with:
+
+```powershell
+npm run vision:normalize:cvat -- `
+  --manifest data/vision/manifest.json `
+  --pass data/vision/exports/pilot-v0/cvat-pilot-v0-pass1.zip `
+  --pass data/vision/exports/pilot-v0/cvat-pilot-v0-pass2.zip `
+  --output data/vision/annotations/pilot-v0.json `
+  --qa-output data/vision/annotations/pilot-v0-cvat-qa.json
+```
+
+The importer reads `annotations.xml` directly from each ZIP, pairs passes by source image filename, and excludes CVAT job owner metadata. It refuses to emit normalized annotations if required shapes or dripper reference geometry are absent.
 
 Validate manifest and normalized annotations together:
 
