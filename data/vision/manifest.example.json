@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "cupmaster-spout-pilot-v0",
+  "sessions": [
+    {
+      "sessionId": "capture-001",
+      "source": "first_party",
+      "consent": true,
+      "license": "CupMaster first-party capture",
+      "kettleId": "kettle-01",
+      "kettleMaterial": "transparent",
+      "kettleColor": "clear",
+      "cameraAngle": 90,
+      "scene": "top_down",
+      "filter": "white",
+      "coffeeBed": "dry",
+      "lighting": "indoor",
+      "background": "light",
+      "containsPouring": true,
+      "notes": "Example metadata only; contains no personal or device identifiers."
+    }
+  ],
+  "videos": [
+    {
+      "videoId": "capture-001-a",
+      "sessionId": "capture-001",
+      "path": "raw/capture-001/capture-001-a.mp4",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "split": "train",
+      "durationMs": 30000
+    }
+  ],
+  "frames": [
+    {
+      "frameId": "capture-001-a-000001",
+      "videoId": "capture-001-a",
+      "path": "frames/capture-001/capture-001-a-000001.jpg",
+      "timestampMs": 5000,
+      "width": 1920,
+      "height": 1080,
+      "kind": "positive",
+      "selectionTags": ["static", "center", "pour_off"]
+    }
+  ]
+}

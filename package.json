@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vision:extract": "node scripts/vision/extract-frames.mjs",
+    "vision:validate": "node scripts/vision/validate-dataset.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

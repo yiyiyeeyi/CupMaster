@@ -46,3 +46,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local vision datasets (schemas/examples remain tracked)
+/data/vision/raw/
+/data/vision/frames/
+/data/vision/annotations/
+/data/vision/exports/
+/data/vision/manifest.json
+/data/vision/*.local.json
+/data/vision/*.zip

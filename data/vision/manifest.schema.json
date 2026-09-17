@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cupmaster.local/schemas/spout-dataset-manifest-v1.json",
+  "title": "CupMaster spout dataset manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasetVersion", "sessions", "videos", "frames"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetVersion": {
+      "type": "string",
+      "pattern": "^cupmaster-spout-(pilot-)?v[0-9]+$"
+    },
+    "sessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/session" }
+    },
+    "videos": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/video" }
+    },
+    "frames": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/frame" }
+    }
+  },
+  "$defs": {
+    "split": { "enum": ["train", "validation", "test"] },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "source",
+        "consent",
+        "kettleId",
+        "kettleMaterial",
+        "kettleColor",
+        "cameraAngle",
+        "scene",
+        "filter",
+        "coffeeBed",
+        "lighting",
+        "background",
+        "containsPouring"
+      ],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["first_party", "licensed_external"] },
+        "consent": { "type": "boolean" },
+        "license": { "type": "string", "minLength": 1 },
+        "attribution": { "type": "string" },
+        "kettleId": { "type": "string", "minLength": 1 },
+        "kettleMaterial": {
+          "enum": ["black_matte", "stainless_steel", "reflective_metal", "painted_metal", "transparent", "semi_transparent", "other"]
+        },
+        "kettleColor": { "type": "string", "minLength": 1 },
+        "cameraAngle": { "type": "number", "minimum": 75, "maximum": 90 },
+        "scene": { "const": "top_down" },
+        "filter": { "enum": ["white", "beige", "brown", "none", "other"] },
+        "coffeeBed": { "enum": ["dry", "wet", "none"] },
+        "lighting": { "enum": ["normal", "dim", "bright", "indoor", "other"] },
+        "background": { "enum": ["light", "dark", "mixed", "other"] },
+        "containsPouring": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["videoId", "sessionId", "path", "sourceSha256", "split"],
+      "properties": {
+        "videoId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sourceSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "split": { "$ref": "#/$defs/split" },
+        "durationMs": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frameId", "videoId", "path", "timestampMs", "width", "height", "kind"],
+      "properties": {
+        "frameId": { "type": "string", "minLength": 1 },
+        "videoId": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "timestampMs": { "type": "number", "minimum": 0 },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "kind": { "enum": ["positive", "negative"] },
+        "selectionTags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "static",
+              "moving",
+              "pour_on",
+              "pour_off",
+              "center",
+              "inner_ring",
+              "middle_ring",
+              "outer_ring",
+              "partial_occlusion",
+              "reentry",
+              "hard_negative"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
