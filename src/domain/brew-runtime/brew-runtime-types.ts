@@ -96,6 +96,7 @@ export interface BrewSessionRuntime {
   stages: BrewStageRuntimeRecord[];
   detection: {
     lastFrameTimestampMs?: number;
+    observedState?: PourState;
     consecutivePositiveFrames: number;
     consecutiveNegativeFrames: number;
     confidence: number;

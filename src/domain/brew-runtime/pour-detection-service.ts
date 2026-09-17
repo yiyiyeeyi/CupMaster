@@ -90,7 +90,11 @@ export class PourDetectionService {
   }
 
   reset() {
-    this.confirmedState = "not_pouring";
+    this.syncConfirmedState("not_pouring");
+  }
+
+  syncConfirmedState(state: ConfirmedPourState) {
+    this.confirmedState = state;
     this.positiveFrames = 0;
     this.negativeFrames = 0;
   }

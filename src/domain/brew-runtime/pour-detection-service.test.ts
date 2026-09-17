@@ -48,6 +48,28 @@ describe("reset", () => {
   it("clears both counters", () => { const service = new PourDetectionService(); service.process(frame(0.8)); service.process(frame(0.8)); service.reset(); expect(service.process(frame(0.5)).snapshot).toMatchObject({ consecutivePositiveFrames: 0, consecutiveNegativeFrames: 0 }); });
 });
 
+describe("confirmed-state synchronization", () => {
+  it("synchronizes to pouring and clears counters", () => {
+    const service = new PourDetectionService();
+    service.process(frame(0.8));
+    service.syncConfirmedState("pouring");
+    expect(service.process(frame(0.2))).toMatchObject({
+      transition: null,
+      snapshot: { state: "pouring", consecutivePositiveFrames: 0, consecutiveNegativeFrames: 1 },
+    });
+  });
+
+  it("synchronizes to not pouring and clears counters", () => {
+    const service = startedService();
+    service.process(frame(0.2));
+    service.syncConfirmedState("not_pouring");
+    expect(service.process(frame(0.8))).toMatchObject({
+      transition: null,
+      snapshot: { state: "not_pouring", consecutivePositiveFrames: 1, consecutiveNegativeFrames: 0 },
+    });
+  });
+});
+
 describe("evidence safety", () => {
   it("clamps finite evidence below zero", () => expect(new PourDetectionService().process(frame(-2)).snapshot.rawEvidence).toBe(0));
   it("clamps finite evidence above one", () => expect(new PourDetectionService().process(frame(2)).snapshot.rawEvidence).toBe(1));
