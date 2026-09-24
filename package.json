@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "vision:extract": "node scripts/vision/extract-frames.mjs",
+    "vision:freeze": "node scripts/vision/freeze-datasets.mjs",
+    "vision:validate:frozen": "node scripts/vision/freeze-datasets.mjs --validate-only",
     "vision:normalize:cvat": "node scripts/vision/normalize-cvat.mjs",
     "vision:validate": "node scripts/vision/validate-dataset.mjs"
   },
