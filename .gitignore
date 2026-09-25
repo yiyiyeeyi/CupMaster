@@ -55,3 +55,6 @@ next-env.d.ts
 /data/vision/manifest.json
 /data/vision/*.local.json
 /data/vision/*.zip
+
+# Local ML experiments, checkpoints, exports, and framework caches
+/.vision-work/
