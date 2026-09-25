@@ -22,6 +22,14 @@ class GeometryTests(unittest.TestCase):
         encoded = json.dumps({"value": np.float32(0.5)}, default=module.json_default)
         self.assertEqual(encoded, '{"value": 0.5}')
 
+    def test_binary_presence_metrics_report_both_error_types(self):
+        result = module.binary_presence_metrics([0.9, 0.2, 0.8, 0.1], [1, 1, 0, 0], 0.5)
+        self.assertEqual(result["accuracy"], 0.5)
+        self.assertEqual(result["positiveRecall"], 0.5)
+        self.assertEqual(result["negativeSpecificity"], 0.5)
+        self.assertEqual(result["falsePresentRate"], 0.5)
+        self.assertEqual(result["falseAbsentRate"], 0.5)
+
     def test_expand_roi_is_per_side_and_clamped(self):
         result = module.expand_roi(
             {"xMin": 10.0, "yMin": 20.0, "xMax": 30.0, "yMax": 60.0},
@@ -79,6 +87,55 @@ class TemporalMetricTests(unittest.TestCase):
         self.assertEqual(result["lostCensoredFailures"], 0)
         self.assertAlmostEqual(result["lostDelaySeconds"]["median"], 0.125)
         self.assertAlmostEqual(result["reacquisitionLatencySeconds"]["median"], 0.25)
+
+
+class PresenceGateTests(unittest.TestCase):
+    @staticmethod
+    def summary(false_lost_count):
+        return {
+            "canonicalTemporal": {
+                "trueExits": 3,
+                "trueExitsReachingLost": 3,
+                "segmentsCrossingKnownAbsence": 0,
+                "trueReentries": 1,
+                "trueReacquisitions": 1,
+                "falseLostCount": false_lost_count,
+            },
+            "localization": {"negativeFalsePositiveCount": 0},
+            "invocationsPerVideoSecond": {"keypoint": 5.0},
+        }
+
+    def test_presence_gate_allows_no_increase_from_frozen_false_lost_baseline(self):
+        self.assertTrue(module.presence_gate_pass(self.summary(3)))
+        self.assertFalse(module.presence_gate_pass(self.summary(4)))
+
+    def test_decision_uses_binary_gate_when_detector_adds_false_split(self):
+        decision = module.presence_gate_decision({"A": self.summary(4), "B": self.summary(3)})
+        self.assertEqual(decision["selected"], "B")
+        self.assertEqual(decision["falseLostDelta"], {"A": 1, "B": 0})
+
+    def test_two_absent_observations_end_segment_despite_valid_keypoint(self):
+        class FakeAdapters:
+            def presence_classifier(self, frame):
+                return {"accepted": False, "confidence": 0.1}
+
+            def keypoint(self, frame, roi):
+                return {"accepted": True, "confidence": 0.99, "point": {"x": 50.0, "y": 50.0}}
+
+        runner = module.HybridRunner("B", 60.0, FakeAdapters(), presence_gate="B")
+        runner.state.state = "TRACKING"
+        runner.state.current_bbox = {"xMin": 20.0, "yMin": 20.0, "xMax": 80.0, "yMax": 80.0}
+        runner.state.last_trusted = {"x": 50.0, "y": 50.0}
+        runner.state.last_trusted_ms = 0.0
+        segment = module.Segment(1, 0.0)
+        runner.state.open_segment = segment
+        runner.state.segments.append(segment)
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        first = runner.process(frame, 0, 0.0)
+        second = runner.process(frame, 12, 200.0)
+        self.assertEqual(first["state"], "TRACKING")
+        self.assertEqual(second["state"], "LOST")
+        self.assertEqual(runner.state.segments[0].end_reason, "presence_absent_confirmed")
 
 
 if __name__ == "__main__":

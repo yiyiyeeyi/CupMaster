@@ -49,6 +49,10 @@ INITIAL_CONFIRMATIONS = 3
 REACQUISITION_CONFIRMATIONS = 2
 LOCAL_ATTEMPTS = 2
 FAILURE_TIMEOUT_MS = 400.0
+PRESENCE_HZ = 5.0
+PRESENCE_CLASSIFIER_THRESHOLD = 0.50
+PRESENCE_ABSENT_CONFIRMATIONS = 2
+BASELINE_FALSE_LOST_PRIMARY_REPEAT = 3
 
 WINDOWS = {
     "primary": (7.75, 47.50),
@@ -95,6 +99,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--skip-video", action="store_true")
     parser.add_argument("--render-only", action="store_true")
+    parser.add_argument("--presence-experiment", action="store_true")
+    parser.add_argument("--presence-finalize-only", action="store_true")
     return parser.parse_args()
 
 
@@ -118,6 +124,46 @@ def distribution(values: Iterable[float]) -> dict[str, float | int | None]:
         "p90": ordered[max(0, math.ceil(0.90 * len(ordered)) - 1)],
         "p99": ordered[max(0, math.ceil(0.99 * len(ordered)) - 1)],
         "max": ordered[-1],
+    }
+
+
+def presence_gate_pass(summary: dict[str, Any]) -> bool:
+    """Apply the 9C-4.1 gate relative to the frozen 9C-4 false-LOST baseline."""
+    temporal = summary["canonicalTemporal"]
+    return (
+        temporal["trueExitsReachingLost"] == temporal["trueExits"]
+        and temporal["segmentsCrossingKnownAbsence"] == 0
+        and temporal["trueReacquisitions"] == temporal["trueReentries"]
+        and summary["localization"]["negativeFalsePositiveCount"] == 0
+        and temporal["falseLostCount"] <= BASELINE_FALSE_LOST_PRIMARY_REPEAT
+        and summary["invocationsPerVideoSecond"]["keypoint"] < 10.0
+    )
+
+
+def presence_gate_decision(summaries: dict[str, Any]) -> dict[str, Any]:
+    gate_a_pass = presence_gate_pass(summaries["A"])
+    gate_b_pass = presence_gate_pass(summaries["B"])
+    selected = "A" if gate_a_pass else "B" if gate_b_pass else None
+    reason = (
+        "Gate A satisfies the temporal gate; prefer the existing detector and avoid the additional classifier."
+        if selected == "A"
+        else (
+            "Gate B is required: it preserves the frozen 9C-4 false-LOST baseline while Gate A adds a false split."
+            if selected == "B"
+            else "Neither gate satisfies the temporal safety criteria relative to the frozen 9C-4 baseline."
+        )
+    )
+    return {
+        "gateAPass": gate_a_pass,
+        "gateBPass": gate_b_pass,
+        "selected": selected,
+        "reason": reason,
+        "falseLostBaseline": BASELINE_FALSE_LOST_PRIMARY_REPEAT,
+        "falseLostDelta": {
+            gate: summaries[gate]["canonicalTemporal"]["falseLostCount"] - BASELINE_FALSE_LOST_PRIMARY_REPEAT
+            for gate in ("A", "B")
+        },
+        "proceedToSession004": selected is not None,
     }
 
 
@@ -170,6 +216,143 @@ def overlap(left: tuple[float, float], right: tuple[float, float]) -> float:
     return max(0.0, min(left[1], right[1]) - max(left[0], right[0]))
 
 
+class PresenceHead(baseline.nn.Module):
+    """A 577-parameter binary head over frozen MobileNetV3 features."""
+
+    def __init__(self, channels: int = 576) -> None:
+        super().__init__()
+        self.pool = baseline.nn.AdaptiveAvgPool2d(1)
+        self.classifier = baseline.nn.Linear(channels, 1)
+
+    def forward(self, inputs: Any) -> Any:
+        return self.classifier(self.pool(inputs).flatten(1))
+
+
+class PresenceExport(baseline.nn.Module):
+    def __init__(self, backbone: Any, head: PresenceHead) -> None:
+        super().__init__()
+        self.backbone = backbone
+        self.head = head
+
+    def forward(self, inputs: Any) -> Any:
+        return baseline.torch.sigmoid(self.head(self.backbone(inputs)))
+
+
+def binary_presence_metrics(
+    probabilities: Iterable[float], labels: Iterable[int], threshold: float = PRESENCE_CLASSIFIER_THRESHOLD,
+) -> dict[str, Any]:
+    pairs = [(float(probability), int(label)) for probability, label in zip(probabilities, labels, strict=True)]
+    positives = sum(label for _, label in pairs)
+    negatives = len(pairs) - positives
+    true_positive = sum(probability >= threshold and label == 1 for probability, label in pairs)
+    true_negative = sum(probability < threshold and label == 0 for probability, label in pairs)
+    false_positive = negatives - true_negative
+    false_negative = positives - true_positive
+    return {
+        "count": len(pairs),
+        "positives": positives,
+        "negatives": negatives,
+        "threshold": threshold,
+        "accuracy": (true_positive + true_negative) / len(pairs),
+        "positiveRecall": true_positive / positives,
+        "negativeSpecificity": true_negative / negatives,
+        "falsePresentRate": false_positive / negatives,
+        "falseAbsentRate": false_negative / positives,
+        "confusion": {"truePresent": true_positive, "trueAbsent": true_negative, "falsePresent": false_positive, "falseAbsent": false_negative},
+    }
+
+
+def train_presence_classifier(repo_root: Path, work_root: Path, epochs: int = 100) -> dict[str, Any]:
+    baseline.set_determinism()
+    train_frames, validation_frames, annotations = baseline.load_records(repo_root)
+    backbone = baseline.mobilenet_v3_small(
+        weights=baseline.MobileNet_V3_Small_Weights.IMAGENET1K_V1,
+    ).features.eval()
+    for parameter in backbone.parameters():
+        parameter.requires_grad_(False)
+    train_examples = baseline.build_examples(repo_root, train_frames, annotations, baseline.AUGMENTATIONS, roi_mode=False)
+    validation_examples = baseline.build_examples(repo_root, validation_frames, annotations, ("identity",), roi_mode=False)
+    train_features = baseline.extract_features(backbone, train_examples)
+    validation_features = baseline.extract_features(backbone, validation_examples)
+    train_labels = baseline.torch.tensor([example.presence for example in train_examples], dtype=baseline.torch.float32)
+    validation_labels = baseline.torch.tensor([example.presence for example in validation_examples], dtype=baseline.torch.float32)
+    positive_count = float(train_labels.sum().item())
+    negative_count = float(len(train_labels) - positive_count)
+    positive_weight = len(train_labels) / (2.0 * positive_count)
+    negative_weight = len(train_labels) / (2.0 * negative_count)
+    sample_weights = baseline.torch.where(
+        train_labels > 0.5,
+        baseline.torch.full_like(train_labels, positive_weight),
+        baseline.torch.full_like(train_labels, negative_weight),
+    )
+    head = PresenceHead()
+    optimizer = baseline.torch.optim.AdamW(head.parameters(), lr=0.01, weight_decay=1e-4)
+    best_loss = math.inf
+    best_epoch = 0
+    best_state = None
+    history = []
+    for epoch in range(1, epochs + 1):
+        head.train()
+        optimizer.zero_grad(set_to_none=True)
+        logits = head(train_features).squeeze(1)
+        loss = baseline.F.binary_cross_entropy_with_logits(logits, train_labels, weight=sample_weights)
+        loss.backward()
+        optimizer.step()
+        head.eval()
+        with baseline.torch.inference_mode():
+            validation_logits = head(validation_features).squeeze(1)
+            validation_loss = baseline.F.binary_cross_entropy_with_logits(validation_logits, validation_labels).item()
+        if validation_loss < best_loss:
+            best_loss = validation_loss
+            best_epoch = epoch
+            best_state = {name: value.detach().cpu().clone() for name, value in head.state_dict().items()}
+        if epoch == 1 or epoch % 10 == 0 or epoch == epochs:
+            history.append({"epoch": epoch, "trainLoss": float(loss.item()), "validationLoss": validation_loss})
+    if best_state is None:
+        raise RuntimeError("Presence classifier did not produce a checkpoint")
+    head.load_state_dict(best_state)
+    head.eval()
+    checkpoint_dir = work_root / "checkpoints/task-9c4-1"
+    export_dir = work_root / "exports/onnx/task-9c4-1"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    export_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = checkpoint_dir / "presence-binary.head.pt"
+    baseline.torch.save({"stateDict": best_state, "bestEpoch": best_epoch, "seed": SEED}, checkpoint_path)
+    with baseline.torch.inference_mode():
+        validation_probabilities = baseline.torch.sigmoid(head(validation_features).squeeze(1)).cpu().numpy()
+    metrics = binary_presence_metrics(validation_probabilities, [round(example.presence) for example in validation_examples])
+    export_model = PresenceExport(backbone, head).eval()
+    onnx_path = export_dir / "presence-binary.onnx"
+    dummy = validation_examples[0].tensor.unsqueeze(0)
+    baseline.torch.onnx.export(
+        export_model,
+        dummy,
+        onnx_path,
+        input_names=["image"],
+        output_names=["presence_probability"],
+        opset_version=17,
+        dynamic_axes=None,
+    )
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    onnx_output = session.run(None, {session.get_inputs()[0].name: dummy.numpy()})[0]
+    with baseline.torch.inference_mode():
+        source_output = export_model(dummy).numpy()
+    return {
+        "formulation": "full-frame frozen MobileNetV3-small features plus global average pool and one 576-to-1 linear layer",
+        "parameters": sum(parameter.numel() for parameter in head.parameters()),
+        "epochs": epochs,
+        "bestEpoch": best_epoch,
+        "bestValidationLoss": best_loss,
+        "history": history,
+        "metrics": metrics,
+        "checkpoint": str(checkpoint_path),
+        "checkpointSha256": sha256_file(checkpoint_path),
+        "onnx": str(onnx_path),
+        "onnxSha256": sha256_file(onnx_path),
+        "onnxMaxAbsoluteDifference": float(np.max(np.abs(source_output - onnx_output))),
+    }
+
+
 class ModelAdapters:
     def __init__(self, work_root: Path) -> None:
         options = ort.SessionOptions()
@@ -182,6 +365,9 @@ class ModelAdapters:
             "fullKeypoint": work_root / "exports/onnx/task-9c2/a1-full-frame-keypoint.onnx",
             "roiKeypoint": work_root / "exports/onnx/task-9c3/r4-jitter-roi-keypoint.onnx",
         }
+        presence_path = work_root / "exports/onnx/task-9c4-1/presence-binary.onnx"
+        if presence_path.exists():
+            model_paths["presenceClassifier"] = presence_path
         self.paths = model_paths
         self.sessions = {
             name: ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
@@ -212,7 +398,7 @@ class ModelAdapters:
 
     def warmup(self, frame: np.ndarray) -> None:
         full, _ = self._prepare(frame, None)
-        for name in ("detector", "fullKeypoint", "roiKeypoint"):
+        for name in self.sessions:
             started = time.perf_counter()
             for _ in range(3):
                 self._run(name, full, record=False)
@@ -242,6 +428,16 @@ class ModelAdapters:
         if roi is not None:
             accepted = accepted and point_in_roi(point, roi)
         return {"accepted": accepted, "confidence": float(output[0]), "point": point}
+
+    def presence_classifier(self, frame: np.ndarray) -> dict[str, Any]:
+        if "presenceClassifier" not in self.sessions:
+            raise RuntimeError("Presence classifier ONNX is not available")
+        started = time.perf_counter()
+        tensor, _ = self._prepare(frame, None)
+        output = self._run("presenceClassifier", tensor, record=False)
+        self.latencies["presenceClassifier"].append((time.perf_counter() - started) * 1000.0)
+        probability = float(np.asarray(output).reshape(-1)[0])
+        return {"accepted": probability >= PRESENCE_CLASSIFIER_THRESHOLD, "confidence": probability}
 
 
 @dataclass
@@ -372,23 +568,29 @@ class RunnerState:
     last_trusted_ms: float | None = None
     next_detector_frame: int = 0
     next_semantic_frame: int = 0
+    next_presence_frame: int = 0
+    consecutive_absent_presence: int = 0
     segment_counter: int = 0
     open_segment: Segment | None = None
     segments: list[Segment] = field(default_factory=list)
 
 
 class HybridRunner:
-    def __init__(self, mode: str, fps: float, adapters: ModelAdapters) -> None:
+    def __init__(self, mode: str, fps: float, adapters: ModelAdapters, presence_gate: str | None = None) -> None:
         if mode not in {"A", "B", "C"}:
             raise ValueError(f"Unknown mode: {mode}")
         self.mode = mode
+        if presence_gate not in {None, "A", "B"}:
+            raise ValueError(f"Unknown presence gate: {presence_gate}")
+        self.presence_gate = presence_gate
         self.fps = fps
         self.adapters = adapters
         self.state = RunnerState()
         self.tracker = LkTracker()
         self.transitions: list[dict[str, Any]] = []
-        self.invocations = {"detector": 0, "keypoint": 0, "tracker": 0}
+        self.invocations = {"detector": 0, "keypoint": 0, "tracker": 0, "presence": 0}
         self.tracker_latencies: list[float] = []
+        self.presence_latencies: list[float] = []
 
     def transition(self, new_state: str, timestamp_ms: float, reason: str, frame_events: list[dict[str, Any]]) -> None:
         previous = self.state.state
@@ -404,7 +606,22 @@ class HybridRunner:
         self.transition("SEARCHING", timestamp_ms, "BEGIN_SEARCH", events)
         self.state.next_detector_frame = start_frame
         self.state.next_semantic_frame = start_frame
+        self.state.next_presence_frame = start_frame
         return events
+
+    def call_presence(self, frame: np.ndarray, detector_result: dict[str, Any] | None = None) -> dict[str, Any]:
+        if self.presence_gate is None:
+            return {"accepted": True, "confidence": 1.0, "source": "disabled"}
+        started = time.perf_counter()
+        self.invocations["presence"] += 1
+        if self.presence_gate == "A":
+            result = detector_result if detector_result is not None else self.adapters.detector(frame)
+            observation = {"accepted": bool(result["accepted"]), "confidence": float(result["confidence"]), "source": "detector"}
+        else:
+            result = self.adapters.presence_classifier(frame)
+            observation = {"accepted": bool(result["accepted"]), "confidence": float(result["confidence"]), "source": "binary_classifier"}
+        self.presence_latencies.append((time.perf_counter() - started) * 1000.0)
+        return observation
 
     def local_roi(self, width: int, height: int) -> dict[str, float] | None:
         if self.state.current_bbox is None:
@@ -462,6 +679,7 @@ class HybridRunner:
         self.state.confirmation_start_ms = None
         self.state.uncertain_start_ms = None
         self.state.local_attempts = 0
+        self.state.consecutive_absent_presence = 0
         self.tracker.clear()
 
     def confirmation(self, frame: np.ndarray, gray: np.ndarray, frame_index: int, timestamp_ms: float,
@@ -490,6 +708,7 @@ class HybridRunner:
             else:
                 self.transition("TRACKING", timestamp_ms, "initial_confirmation_complete", frame_events)
             self.state.next_semantic_frame = frame_index + max(1, round(self.fps / SEMANTIC_CORRECTION_HZ))
+            self.state.next_presence_frame = frame_index + max(1, round(self.fps / PRESENCE_HZ))
         return keypoint, roi
 
     def begin_uncertain(self, timestamp_ms: float, reason: str, frame_events: list[dict[str, Any]]) -> None:
@@ -522,6 +741,7 @@ class HybridRunner:
         frame_events: list[dict[str, Any]] = []
         semantic: dict[str, Any] | None = None
         detector: dict[str, Any] | None = None
+        presence: dict[str, Any] | None = None
         tracker_result: LkResult | None = None
         roi: dict[str, float] | None = self.local_roi(frame.shape[1], frame.shape[0])
 
@@ -540,18 +760,30 @@ class HybridRunner:
                 detector = self.adapters.detector(frame)
                 self.state.next_detector_frame = frame_index + max(1, round(self.fps / DETECTOR_HZ))
                 if detector["accepted"]:
-                    self.state.origin = "reacquisition" if self.state.state == "LOST" else "initial"
-                    self.state.current_bbox = dict(detector["bbox"])
-                    self.state.confirmation_count = 0
-                    self.state.confirmation_start_ms = None
-                    self.transition("ACQUIRING", timestamp_ms, "detector_candidate", frame_events)
-                    semantic, roi = self.confirmation(frame, gray, frame_index, timestamp_ms, frame_events)
+                    presence = self.call_presence(frame, detector)
+                    if presence["accepted"]:
+                        self.state.origin = "reacquisition" if self.state.state == "LOST" else "initial"
+                        self.state.current_bbox = dict(detector["bbox"])
+                        self.state.confirmation_count = 0
+                        self.state.confirmation_start_ms = None
+                        self.state.consecutive_absent_presence = 0
+                        self.transition("ACQUIRING", timestamp_ms, "detector_and_presence_candidate", frame_events)
+                        semantic, roi = self.confirmation(frame, gray, frame_index, timestamp_ms, frame_events)
 
         elif self.state.state == "ACQUIRING":
             semantic, roi = self.confirmation(frame, gray, frame_index, timestamp_ms, frame_events)
 
         elif self.state.state == "TRACKING":
-            if self.mode == "C":
+            if self.presence_gate is not None and frame_index >= self.state.next_presence_frame:
+                presence = self.call_presence(frame)
+                self.state.next_presence_frame = frame_index + max(1, round(self.fps / PRESENCE_HZ))
+                if presence["accepted"]:
+                    self.state.consecutive_absent_presence = 0
+                else:
+                    self.state.consecutive_absent_presence += 1
+                    if self.state.consecutive_absent_presence >= PRESENCE_ABSENT_CONFIRMATIONS:
+                        self.enter_lost(timestamp_ms, "presence_absent_confirmed", frame_events)
+            if self.state.state == "TRACKING" and self.mode == "C":
                 self.invocations["tracker"] += 1
                 started = time.perf_counter()
                 tracker_result = self.tracker.update(gray)
@@ -586,7 +818,7 @@ class HybridRunner:
                             self.state.local_attempts = 1
                         else:
                             self.accept_point(semantic["point"], timestamp_ms, frame, gray)
-            else:
+            elif self.state.state == "TRACKING":
                 semantic, roi = self.call_keypoint(frame)
                 if not semantic["accepted"]:
                     self.begin_uncertain(timestamp_ms, "semantic_miss", frame_events)
@@ -621,6 +853,9 @@ class HybridRunner:
             "trackerQuality": tracker_result.quality if tracker_result else None,
             "trackerFbError": tracker_result.median_fb_error if tracker_result else None,
             "trackerFeatures": tracker_result.valid_features if tracker_result else None,
+            "presenceProbability": presence.get("confidence") if presence else None,
+            "presenceDecision": presence.get("accepted") if presence else None,
+            "presenceSource": presence.get("source") if presence else None,
             "events": frame_events,
         }
 
@@ -658,6 +893,7 @@ def read_frame(capture: cv2.VideoCapture, frame_index: int) -> np.ndarray:
 
 def run_window(
     video_path: Path, mode: str, name: str, bounds: tuple[float, float], adapters: ModelAdapters,
+    presence_gate: str | None = None,
 ) -> dict[str, Any]:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -665,7 +901,7 @@ def run_window(
     fps = float(capture.get(cv2.CAP_PROP_FPS))
     start_frame = round(bounds[0] * fps)
     end_frame = min(round(bounds[1] * fps), int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
-    runner = HybridRunner(mode, fps, adapters)
+    runner = HybridRunner(mode, fps, adapters, presence_gate=presence_gate)
     records = []
     started = time.perf_counter()
     first_events = runner.begin(start_frame, start_frame / fps * 1000.0)
@@ -688,6 +924,7 @@ def run_window(
         "window": name,
         "boundsSeconds": bounds,
         "mode": mode,
+        "presenceGate": presence_gate,
         "fps": fps,
         "frames": len(records),
         "elapsedSeconds": elapsed,
@@ -695,6 +932,8 @@ def run_window(
         "invocations": runner.invocations,
         "trackerLatenciesMs": runner.tracker_latencies,
         "trackerLatencyMs": distribution(runner.tracker_latencies),
+        "presenceLatenciesMs": runner.presence_latencies,
+        "presenceLatencyMs": distribution(runner.presence_latencies),
         "transitions": runner.transitions,
         "segments": segments,
         "records": records,
@@ -833,6 +1072,123 @@ def temporal_metrics(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def evaluate_static_presence(
+    repo_root: Path,
+    frames: list[dict[str, Any]],
+    annotations: dict[str, dict[str, Any]],
+    adapters: ModelAdapters,
+    gate: str,
+) -> dict[str, Any]:
+    probabilities = []
+    labels = []
+    latencies = []
+    records = []
+    for frame_record in frames:
+        path = repo_root / "data/vision" / frame_record["path"]
+        frame = cv2.imread(str(path), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise RuntimeError(f"Could not read validation checkpoint {path}")
+        started = time.perf_counter()
+        observation = adapters.detector(frame) if gate == "A" else adapters.presence_classifier(frame)
+        latencies.append((time.perf_counter() - started) * 1000.0)
+        probability = float(observation["confidence"])
+        label = int(bool(annotations[frame_record["frameId"]]["objects"]))
+        probabilities.append(probability)
+        labels.append(label)
+        records.append({
+            "frameId": frame_record["frameId"],
+            "label": label,
+            "probability": probability,
+            "predictedPresent": bool(observation["accepted"]),
+        })
+    threshold = DETECTOR_THRESHOLD if gate == "A" else PRESENCE_CLASSIFIER_THRESHOLD
+    return {
+        "method": "existing B0 valid detection" if gate == "A" else "tiny full-frame binary classifier",
+        "metrics": binary_presence_metrics(probabilities, labels, threshold),
+        "latencyMs": distribution(latencies),
+        "records": records,
+    }
+
+
+def presence_temporal_metrics(run: dict[str, Any]) -> dict[str, Any]:
+    base = temporal_metrics(run)
+    name = run["window"]
+    true_intervals = TRUE_VISIBLE[name]
+    lost_events = [event for event in run["transitions"] if event["to"] == "LOST"]
+    reacquired_events = [event for event in run["transitions"] if event["to"] == "REACQUIRED"]
+    exits = EVENT_TRUTH[name]["exits"]
+    true_exit_delays = []
+    exit_records = []
+    for exit_seconds in exits:
+        next_visible = min((start for start, _ in true_intervals if start > exit_seconds), default=run["boundsSeconds"][1])
+        match = next(
+            (
+                event for event in lost_events
+                if exit_seconds <= event["timestampMs"] / 1000.0 < next_visible
+            ),
+            None,
+        )
+        anchor_record = min(run["records"], key=lambda record: abs(record["timestampMs"] / 1000.0 - exit_seconds))
+        anchor = anchor_record["emittedPoint"]
+        max_anchor_displacement = None
+        if match is not None and anchor is not None:
+            candidates = [
+                record["emittedPoint"]
+                for record in run["records"]
+                if exit_seconds * 1000.0 <= record["timestampMs"] <= match["timestampMs"] and record["emittedPoint"] is not None
+            ]
+            max_anchor_displacement = max((point_distance(anchor, point) for point in candidates), default=0.0)
+            true_exit_delays.append(match["timestampMs"] / 1000.0 - exit_seconds)
+        exit_records.append({
+            "trueExitSeconds": exit_seconds,
+            "lostTimestampSeconds": match["timestampMs"] / 1000.0 if match else None,
+            "delaySeconds": match["timestampMs"] / 1000.0 - exit_seconds if match else None,
+            "reason": match["reason"] if match else None,
+            "maximumAnchorDisplacementPxBeforeLost": max_anchor_displacement,
+        })
+    false_lost = [
+        event
+        for event in lost_events
+        if any(start <= event["timestampMs"] / 1000.0 < end for start, end in true_intervals)
+    ]
+    reentry_records = []
+    for entry_seconds in EVENT_TRUTH[name]["reentries"]:
+        interval_end = next((end for start, end in true_intervals if start == entry_seconds), run["boundsSeconds"][1])
+        match = next(
+            (
+                event for event in reacquired_events
+                if entry_seconds <= event["timestampMs"] / 1000.0 <= interval_end
+            ),
+            None,
+        )
+        reentry_records.append({
+            "trueReentrySeconds": entry_seconds,
+            "reacquiredTimestampSeconds": match["timestampMs"] / 1000.0 if match else None,
+            "latencySeconds": match["timestampMs"] / 1000.0 - entry_seconds if match else None,
+        })
+    segments = [
+        (segment["start_ms"] / 1000.0, (segment["end_ms"] or segment["start_ms"]) / 1000.0)
+        for segment in run["segments"]
+    ]
+    absence_crossings = 0
+    for left, right in zip(true_intervals, true_intervals[1:]):
+        absence_crossings += sum(segment[0] < left[1] and segment[1] > right[0] for segment in segments)
+    base.update({
+        "trueExits": len(exits),
+        "trueExitsReachingLost": sum(record["lostTimestampSeconds"] is not None for record in exit_records),
+        "exitRecords": exit_records,
+        "presenceTriggeredLostDelaySeconds": distribution(true_exit_delays),
+        "falseLostCount": len(false_lost),
+        "falseLostTimestampsSeconds": [event["timestampMs"] / 1000.0 for event in false_lost],
+        "trueReentries": len(reentry_records),
+        "trueReacquisitions": sum(record["reacquiredTimestampSeconds"] is not None for record in reentry_records),
+        "reentryRecords": reentry_records,
+        "segmentsCrossingKnownAbsence": absence_crossings,
+        "backgroundLockTerminated": bool(exits) and all(record["lostTimestampSeconds"] is not None for record in exit_records),
+    })
+    return base
+
+
 def annotate_frame(frame: np.ndarray, record: dict[str, Any], scale: float = 0.5) -> np.ndarray:
     canvas = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     def point(value: dict[str, float] | None) -> tuple[int, int] | None:
@@ -855,6 +1211,7 @@ def annotate_frame(frame: np.ndarray, record: dict[str, Any], scale: float = 0.5
     lines = [
         f"t={timestamp:06.2f}s state={record['state']} segment={record['segmentId']}",
         f"det={record.get('detectorConfidence')!s:.6} kp={record.get('semanticConfidence')!s:.6} lk={record.get('trackerQuality')!s:.6}",
+        f"presence={record.get('presenceProbability')!s:.6} decision={record.get('presenceDecision')}",
     ]
     for index, text in enumerate(lines):
         cv2.putText(canvas, text, (10, 25 + index * 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 3, cv2.LINE_AA)
@@ -945,6 +1302,184 @@ def safe_git_head(repo_root: Path) -> str:
     return result.stdout.strip()
 
 
+def run_presence_experiment(
+    repo_root: Path,
+    work_root: Path,
+    video_path: Path,
+    video_metadata: dict[str, Any],
+    frames: list[dict[str, Any]],
+    annotations: dict[str, dict[str, Any]],
+    manifest_path: Path,
+    annotation_path: Path,
+    adapters: ModelAdapters,
+    presence_training: dict[str, Any],
+    skip_video: bool,
+) -> None:
+    run_root = work_root / "runs/task-9c4-1-presence"
+    output_root = work_root / "eval/task-9c4-1"
+    run_root.mkdir(parents=True, exist_ok=True)
+    output_root.mkdir(parents=True, exist_ok=True)
+    static_presence = {
+        "A": evaluate_static_presence(repo_root, frames, annotations, adapters, "A"),
+        "B": evaluate_static_presence(repo_root, frames, annotations, adapters, "B"),
+    }
+    for values in adapters.latencies.values():
+        values.clear()
+    experiment_windows = {
+        name: WINDOWS[name]
+        for name in ("primary", "exit_lost", "reacquisition", "edge_hand", "repeat_cycle")
+    }
+    all_runs: dict[str, dict[str, Any]] = {"A": {}, "B": {}}
+    gate_latencies: dict[str, dict[str, list[float]]] = {}
+    visuals = {}
+    for gate in ("A", "B"):
+        before = {name: len(values) for name, values in adapters.latencies.items()}
+        for name, bounds in experiment_windows.items():
+            run = run_window(video_path, "C", name, bounds, adapters, presence_gate=gate)
+            run["temporalMetrics"] = presence_temporal_metrics(run)
+            all_runs[gate][name] = run
+        gate_latencies[gate] = {
+            name: values[before[name]:]
+            for name, values in adapters.latencies.items()
+        }
+        if not skip_video:
+            visuals[gate] = render_visuals(video_path, all_runs[gate]["primary"], output_root / f"gate-{gate.lower()}")
+
+    summaries = {}
+    total_video_seconds = sum(end - start for start, end in experiment_windows.values())
+    for gate, runs in all_runs.items():
+        sources = runs["primary"]["records"] + runs["repeat_cycle"]["records"]
+        canonical = {}
+        for frame_record in frames:
+            seconds = frame_record["timestampMs"] / 1000.0
+            if WINDOWS["primary"][0] <= seconds <= WINDOWS["primary"][1] or WINDOWS["repeat_cycle"][0] <= seconds <= WINDOWS["repeat_cycle"][1]:
+                canonical[frame_record["frameId"]] = record_nearest(sources, frame_record["timestampMs"])
+        localization, sparse_predictions = localization_metrics(canonical, frames, annotations)
+        total_wall = sum(run["elapsedSeconds"] for run in runs.values())
+        total_frames = sum(run["frames"] for run in runs.values())
+        invocations = {
+            name: sum(run["invocations"][name] for run in runs.values())
+            for name in ("detector", "keypoint", "tracker", "presence")
+        }
+        tracker_latencies = [value for run in runs.values() for value in run["trackerLatenciesMs"]]
+        presence_latencies = [value for run in runs.values() for value in run["presenceLatenciesMs"]]
+        detector_latencies = gate_latencies[gate]["detector"]
+        keypoint_latencies = gate_latencies[gate]["roiKeypoint"]
+        classifier_latencies = gate_latencies[gate].get("presenceClassifier", [])
+        semantic_ms = sum(detector_latencies) + sum(keypoint_latencies) + sum(classifier_latencies)
+        primary_temporal = runs["primary"]["temporalMetrics"]
+        repeat_temporal = runs["repeat_cycle"]["temporalMetrics"]
+        summaries[gate] = {
+            "staticPresence": static_presence[gate],
+            "localization": localization,
+            "sparsePredictions": sparse_predictions,
+            "trajectoryJitter": sparse_jitter(sparse_predictions, annotations),
+            "temporal": {name: run["temporalMetrics"] for name, run in runs.items()},
+            "canonicalTemporal": {
+                "trueExits": primary_temporal["trueExits"] + repeat_temporal["trueExits"],
+                "trueExitsReachingLost": primary_temporal["trueExitsReachingLost"] + repeat_temporal["trueExitsReachingLost"],
+                "lostDelaySeconds": distribution(
+                    record["delaySeconds"]
+                    for temporal in (primary_temporal, repeat_temporal)
+                    for record in temporal["exitRecords"]
+                    if record["delaySeconds"] is not None
+                ),
+                "falseLostCount": primary_temporal["falseLostCount"] + repeat_temporal["falseLostCount"],
+                "trueReentries": primary_temporal["trueReentries"],
+                "trueReacquisitions": primary_temporal["trueReacquisitions"],
+                "reacquisitionLatencySeconds": distribution(
+                    record["latencySeconds"]
+                    for record in primary_temporal["reentryRecords"]
+                    if record["latencySeconds"] is not None
+                ),
+                "falseReacquisitionCount": primary_temporal["falseReacquisitionCount"] + repeat_temporal["falseReacquisitionCount"],
+                "falseSegmentSplits": primary_temporal["falseSegmentSplits"] + repeat_temporal["falseSegmentSplits"],
+                "falseSegmentMerges": primary_temporal["falseSegmentMerges"] + repeat_temporal["falseSegmentMerges"],
+                "segmentsCrossingKnownAbsence": primary_temporal["segmentsCrossingKnownAbsence"],
+                "backgroundLockTerminated": primary_temporal["backgroundLockTerminated"] and repeat_temporal["backgroundLockTerminated"],
+                "exitRecords": primary_temporal["exitRecords"] + repeat_temporal["exitRecords"],
+            },
+            "invocations": invocations,
+            "invocationsPerVideoSecond": {name: count / total_video_seconds for name, count in invocations.items()},
+            "latencyMs": {
+                "detector": distribution(detector_latencies),
+                "keypoint": distribution(keypoint_latencies),
+                "tracker": distribution(tracker_latencies),
+                "presenceGate": distribution(presence_latencies),
+                "binaryClassifier": distribution(classifier_latencies),
+            },
+            "effectiveOfflineFps": total_frames / total_wall,
+            "wallSeconds": total_wall,
+            "dutyCyclePercent": {
+                "expensiveSemantic": semantic_ms / (total_wall * 1000.0) * 100.0,
+                "tracker": sum(tracker_latencies) / (total_wall * 1000.0) * 100.0,
+            },
+        }
+
+    decision = presence_gate_decision(summaries)
+    predictions_path = run_root / "predictions.json"
+    predictions_path.write_text(
+        json.dumps({gate: {name: run["records"] for name, run in runs.items()} for gate, runs in all_runs.items()}, indent=2, default=json_default),
+        encoding="utf-8",
+    )
+    result = {
+        "status": "complete",
+        "source": {"path": str(video_path), "sha256": sha256_file(video_path), **video_metadata},
+        "dataset": {
+            "trainingSessions": ["session-001", "session-002"],
+            "validationSession": SESSION,
+            "manifest": str(manifest_path), "manifestSha256": sha256_file(manifest_path),
+            "annotations": str(annotation_path), "annotationsSha256": sha256_file(annotation_path),
+            "session004Accessed": False, "externalMediaAccessed": False,
+        },
+        "policy": {
+            "presenceHz": PRESENCE_HZ,
+            "gateAThreshold": DETECTOR_THRESHOLD,
+            "gateBThreshold": PRESENCE_CLASSIFIER_THRESHOLD,
+            "absentConfirmations": PRESENCE_ABSENT_CONFIRMATIONS,
+            "acquisition": "one positive presence gate observation plus three frozen keypoint confirmations",
+            "reacquisition": "one positive presence gate observation plus two frozen keypoint confirmations",
+            "timeout": "two consecutive absent observations terminate immediately; existing uncertain timeout remains 400 ms",
+            "windows": experiment_windows,
+        },
+        "presenceClassifierTraining": presence_training,
+        "gates": summaries,
+        "decision": decision,
+        "visualQa": visuals,
+        "predictions": str(predictions_path),
+        "sourceCommit": safe_git_head(repo_root),
+    }
+    results_path = run_root / "results.json"
+    results_path.write_text(json.dumps(result, indent=2, default=json_default), encoding="utf-8")
+    print(json.dumps({"status": "complete", "results": str(results_path), "decision": result["decision"], "gates": summaries}, indent=2, default=json_default))
+
+
+def finalize_presence_experiment(work_root: Path, video_path: Path) -> None:
+    """Re-apply the reviewed decision rule and render QA without repeating inference."""
+    run_root = work_root / "runs/task-9c4-1-presence"
+    output_root = work_root / "eval/task-9c4-1"
+    results_path = run_root / "results.json"
+    predictions_path = run_root / "predictions.json"
+    result = json.loads(results_path.read_text(encoding="utf-8"))
+    predictions = json.loads(predictions_path.read_text(encoding="utf-8"))
+    result["decision"] = presence_gate_decision(result["gates"])
+    result["visualQa"] = {
+        gate: render_visuals(
+            video_path,
+            {"records": predictions[gate]["primary"], "fps": result["source"]["fps"]},
+            output_root / f"gate-{gate.lower()}",
+        )
+        for gate in ("A", "B")
+    }
+    results_path.write_text(json.dumps(result, indent=2, default=json_default), encoding="utf-8")
+    print(json.dumps({
+        "status": "finalized",
+        "results": str(results_path),
+        "decision": result["decision"],
+        "visualQa": result["visualQa"],
+    }, indent=2))
+
+
 def main() -> None:
     args = parse_args()
     repo_root = args.repo_root.resolve()
@@ -956,6 +1491,9 @@ def main() -> None:
     video_path = repo_root / "data/vision/raw/session-003.mov"
     if video_path.name != "session-003.mov":
         raise RuntimeError("Media allowlist violation")
+    if args.presence_finalize_only:
+        finalize_presence_experiment(work_root, video_path)
+        return
     if args.render_only:
         predictions_path = run_root / "predictions.json"
         results_path = run_root / "results.json"
@@ -970,6 +1508,7 @@ def main() -> None:
     frames, annotations, manifest_path, annotation_path = load_ground_truth(repo_root)
     cv2.setNumThreads(1)
     cv2.setRNGSeed(SEED)
+    presence_training = train_presence_classifier(repo_root, work_root) if args.presence_experiment else None
     adapters = ModelAdapters(work_root)
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -984,6 +1523,23 @@ def main() -> None:
     }
     capture.release()
     adapters.warmup(first_frame)
+    if args.presence_experiment:
+        if presence_training is None:
+            raise RuntimeError("Presence training result is missing")
+        run_presence_experiment(
+            repo_root,
+            work_root,
+            video_path,
+            video_metadata,
+            frames,
+            annotations,
+            manifest_path,
+            annotation_path,
+            adapters,
+            presence_training,
+            args.skip_video,
+        )
+        return
     sparse_review = prepare_sparse_review(video_path, output_root / "sparse-review")
 
     all_runs: dict[str, dict[str, Any]] = {mode: {} for mode in ("A", "B", "C")}
