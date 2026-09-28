@@ -18,6 +18,12 @@ class GlobalLocalPolicyTests(unittest.TestCase):
             {"xMin": 0.0, "yMin": 0.0, "xMax": 100.0, "yMax": 90.0},
         )
 
+    def test_square_roi_clamps_predictions_outside_image(self):
+        self.assertEqual(
+            MODULE.square_roi((-500, 900), 200, 300, 0.5),
+            {"xMin": 0.0, "yMin": 250.0, "xMax": 50.0, "yMax": 300.0},
+        )
+
     def test_roi_safety_is_positive_inside_and_negative_outside(self):
         roi = {"xMin": 10.0, "yMin": 20.0, "xMax": 50.0, "yMax": 60.0}
         self.assertEqual(MODULE.roi_safety({"x": 30.0, "y": 30.0}, roi), (True, 10.0))

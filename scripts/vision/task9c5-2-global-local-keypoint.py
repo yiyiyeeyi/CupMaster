@@ -86,11 +86,13 @@ def open_image(repo_root: Path, frame: dict[str, Any]) -> Image.Image:
 def square_roi(center: tuple[float, float], width: int, height: int, size_fraction: float) -> dict[str, float]:
     side = float(width) * size_fraction
     half = side / 2
+    center_x = min(max(center[0], 0.0), float(width))
+    center_y = min(max(center[1], 0.0), float(height))
     return {
-        "xMin": max(0.0, center[0] - half),
-        "yMin": max(0.0, center[1] - half),
-        "xMax": min(float(width), center[0] + half),
-        "yMax": min(float(height), center[1] + half),
+        "xMin": max(0.0, center_x - half),
+        "yMin": max(0.0, center_y - half),
+        "xMax": min(float(width), center_x + half),
+        "yMax": min(float(height), center_y + half),
     }
 
 
