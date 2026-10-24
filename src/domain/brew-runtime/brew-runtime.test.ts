@@ -41,9 +41,13 @@ describe("Brew Runtime domain model", () => {
       recipe,
       currentStageIndex: null,
       pourState: "not_pouring",
-      stages: recipe.stages.map(({ id, order, name }) => ({ stageId: id, order, name, completed: false })),
+      stages: recipe.stages.map(({ id, order, name }) => ({ stageId: id, order, name, pausedDurationMs: 0, completed: false })),
       detection: { consecutivePositiveFrames: 0, consecutiveNegativeFrames: 0, confidence: 0 },
+      runNumber: 1,
+      accumulatedPauseMs: 0,
       manualOverrideUsed: false,
+      guidanceEvents: [],
+      nextGuidanceSequence: 1,
       errors: [],
     };
     expect(runtime).toMatchObject({ state: "idle", mode: "camera_assisted", currentStageIndex: null });

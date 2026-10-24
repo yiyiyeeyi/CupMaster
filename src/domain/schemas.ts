@@ -11,10 +11,24 @@ export const userProfileSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+const recipeStepGuidanceSchema = z.object({
+  start: z.string().trim().min(1).max(500).optional(),
+  end: z.string().trim().min(1).max(500).optional(),
+  details: z.array(z.object({
+    id: z.string().min(1),
+    atSeconds: z.number().finite().nonnegative(),
+    message: z.string().trim().min(1).max(500),
+  })).optional(),
+}).refine((guidance) => new Set(guidance.details?.map((detail) => detail.id)).size === (guidance.details?.length ?? 0), {
+  message: "Guidance detail IDs must be unique within a recipe step.",
+  path: ["details"],
+});
+
 const recipeStepSchema = z.object({
   id: z.string().min(1), order: z.number().int().positive(), title: z.string().min(1),
   targetWaterGrams: z.number().positive(), durationSeconds: z.number().positive().optional(),
   pattern: z.enum(["center", "spiral", "pulse", "continuous", "immersion"]).optional(), instruction: z.string().min(1),
+  guidance: recipeStepGuidanceSchema.optional(),
 });
 
 export const recipeSchema = z.object({

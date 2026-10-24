@@ -24,6 +24,18 @@ describe("Quick Prepare validation and factories", () => {
   it("orders snapshot steps", () => { const copy = structuredClone(recipe); copy.currentVersion.steps.reverse(); expect(createBrewPlan(copy, defaults, deps).snapshot.steps.map((step) => step.order)).toEqual([...copy.currentVersion.steps].map((step) => step.order).sort((a, b) => a - b)); });
   it("does not change snapshot values when the source recipe changes", () => { const copy = structuredClone(recipe); const { snapshot } = createBrewPlan(copy, defaults, deps); copy.currentVersion.title = "Changed"; copy.currentVersion.doseGrams = 99; expect(snapshot.title).not.toBe("Changed"); expect(snapshot.doseGrams.recipeDefault).not.toBe(99); });
   it("does not share step references with the source recipe", () => { const copy = structuredClone(recipe); const { snapshot } = createBrewPlan(copy, defaults, deps); copy.currentVersion.steps[0].title = "Changed step"; expect(snapshot.steps[0].title).not.toBe("Changed step"); });
+  it("copies optional step guidance into the plan and immutable snapshot without shared nested references", () => {
+    const copy = structuredClone(recipe);
+    copy.currentVersion.steps[0].guidance = {
+      start: "Begin blooming.",
+      details: [{ id: "swirl", atSeconds: 10, message: "Swirl gently." }],
+      end: "Bloom complete.",
+    };
+    const { plan, snapshot } = createBrewPlan(copy, defaults, deps);
+    copy.currentVersion.steps[0].guidance.details![0].message = "Changed";
+    expect(plan.stages[0].guidance?.details?.[0].message).toBe("Swirl gently.");
+    expect(snapshot.steps[0].guidance?.details?.[0].message).toBe("Swirl gently.");
+  });
   it("creates the required initial Draft state", () => { const draft = createBrewDraft(recipe, defaults, deps); expect(draft).toMatchObject({ executionStatus: "not_started", recordStatus: "draft", feedbackStatus: "not_requested", analysisStatus: "not_requested", currentStageOrder: 0, startedAt: null, completedAt: null, pausedAt: null, accumulatedPauseSeconds: 0, stageResults: [] }); });
   it("creates a Draft without Bean or Equipment", () => { const draft = createBrewDraft(recipe, { ...defaults, grindSetting: undefined }, deps); expect(draft.recipeSnapshot.bean).toBeUndefined(); expect(draft.recipeSnapshot.equipment).toBeUndefined(); expect(draft.brewPlan.equipmentNotes).toBeUndefined(); expect(draft.feedbackStatus).toBe("not_requested"); expect(draft.analysisStatus).toBe("not_requested"); });
 });

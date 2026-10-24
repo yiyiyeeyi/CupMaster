@@ -28,13 +28,15 @@ export interface UserProfile { id: Id; displayName: string; experienceLevel: Use
 export interface Equipment { id: Id; category: "dripper" | "grinder" | "kettle" | "scale" | "server" | "other"; name: string; brand?: string; model?: string; notes?: string; }
 export interface GearGuideItem { id: Id; category: Equipment["category"]; title: string; summary: string; experienceLevels: UserExperienceLevel[]; selectionCriteria: string[]; }
 export interface Bean { id: Id; name: string; roaster?: string; origin?: string; process?: string; roastLevel?: "light" | "medium_light" | "medium" | "medium_dark" | "dark"; notes?: string; }
-export interface RecipeStep { id: Id; order: number; title: string; targetWaterGrams: number; durationSeconds?: number; pattern?: "center" | "spiral" | "pulse" | "continuous" | "immersion"; instruction: string; }
+export interface RecipeStepGuidanceDetail { id: Id; atSeconds: number; message: string; }
+export interface RecipeStepGuidance { start?: string; end?: string; details?: RecipeStepGuidanceDetail[]; }
+export interface RecipeStep { id: Id; order: number; title: string; targetWaterGrams: number; durationSeconds?: number; pattern?: "center" | "spiral" | "pulse" | "continuous" | "immersion"; instruction: string; guidance?: RecipeStepGuidance; }
 export interface RecipeVersion { id: Id; recipeId: Id; version: number; title: string; description: string; method: Method; author: string; doseGrams: number; totalWaterGrams: number; temperatureCelsius: number; grindDescription: string; dripper: string; expectedTimeSeconds: number; difficulty: RecipeDifficulty; roastSuitability: RoastSuitability[]; steps: RecipeStep[]; createdAt: ISODateTime; }
 export interface Recipe { id: Id; type: RecipeType; currentVersion: RecipeVersion; parentRecipeId?: Id; publishedAt?: ISODateTime; }
 
 export interface QuickPrepareInput { recipeVersionId: Id; coffeeDose: number; waterTotal: number; waterTemperature: number; dripper: string; grindSetting?: string; beanName?: string; equipmentNotes?: string; userGoal?: string; }
 export interface BrewPlan { id: Id; sourceRecipeId: Id; sourceRecipeVersion: number; recipeTitle: string; method: Method; coffeeDose: ResolvedParameter<number>; waterTotal: ResolvedParameter<number>; waterTemperature: ResolvedParameter<number>; ratio: number; dripper: ResolvedParameter<string>; grindSetting?: ResolvedParameter<string>; beanMetadata?: { name: string }; equipmentNotes?: string; userGoal?: string; expectedTotalTime: number; stages: BrewStage[]; createdAt: ISODateTime; }
-export interface BrewStage { id: Id; order: number; title: string; targetWaterGrams: number; targetDurationSeconds?: number; pattern?: RecipeStep["pattern"]; instruction: string; }
+export interface BrewStage { id: Id; order: number; title: string; targetWaterGrams: number; targetDurationSeconds?: number; pattern?: RecipeStep["pattern"]; instruction: string; guidance?: RecipeStepGuidance; }
 export interface BrewStageResult { stageOrder: number; stageId: Id; actualStartedAt: ISODateTime; actualCompletedAt: ISODateTime; actualDurationSeconds: number; actualWeight: null; weightDifference: null; wasSkipped: false; }
 
 export interface BrewRecipeSnapshot {

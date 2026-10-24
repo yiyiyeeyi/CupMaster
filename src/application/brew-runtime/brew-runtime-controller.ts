@@ -3,6 +3,7 @@ import {
   PourDetectionService,
   reduceBrewRuntime,
   type BrewRecipeRuntimeDefinition,
+  type BrewGuidanceEvent,
   type BrewRuntimeEvent,
   type BrewRuntimeMode,
   type BrewSessionRuntime,
@@ -18,13 +19,26 @@ export interface BrewRuntimeControllerOptions {
 }
 
 type RuntimeListener = (snapshot: BrewSessionRuntime) => void;
+type GuidanceListener = (event: Readonly<BrewGuidanceEvent>) => void;
+
+function cloneGuidanceEvent(event: BrewGuidanceEvent): BrewGuidanceEvent {
+  return { ...event };
+}
 
 function cloneRuntime(runtime: BrewSessionRuntime): BrewSessionRuntime {
   return {
     ...runtime,
     recipe: {
       ...runtime.recipe,
-      stages: runtime.recipe.stages.map((stage) => ({ ...stage })),
+      stages: runtime.recipe.stages.map((stage) => ({
+        ...stage,
+        ...(stage.guidance && {
+          guidance: {
+            ...stage.guidance,
+            ...(stage.guidance.details && { details: stage.guidance.details.map((detail) => ({ ...detail })) }),
+          },
+        }),
+      })),
     },
     ...(runtime.calibration && {
       calibration: {
@@ -36,6 +50,7 @@ function cloneRuntime(runtime: BrewSessionRuntime): BrewSessionRuntime {
       },
     }),
     stages: runtime.stages.map((stage) => ({ ...stage })),
+    guidanceEvents: runtime.guidanceEvents.map(cloneGuidanceEvent),
     detection: { ...runtime.detection },
     errors: [...runtime.errors],
   };
@@ -45,6 +60,7 @@ export class BrewRuntimeController {
   private runtime: BrewSessionRuntime;
   private readonly detector: PourDetectionService;
   private readonly listeners = new Set<RuntimeListener>();
+  private readonly guidanceListeners = new Set<GuidanceListener>();
 
   constructor(options: BrewRuntimeControllerOptions) {
     this.runtime = createInitialBrewRuntime({
@@ -63,8 +79,25 @@ export class BrewRuntimeController {
     return this.dispatch({ type: "CAMERA_READY", timestampMs });
   }
 
+  tick(timestampMs: number) {
+    return this.dispatch({ type: "RUNTIME_TICK", timestampMs });
+  }
+
+  pause(timestampMs: number) {
+    return this.dispatch({ type: "SESSION_PAUSED", timestampMs });
+  }
+
+  resume(timestampMs: number) {
+    return this.dispatch({ type: "SESSION_RESUMED", timestampMs });
+  }
+
+  restart(timestampMs: number) {
+    this.detector.reset();
+    return this.dispatch({ type: "SESSION_RESTARTED", timestampMs });
+  }
+
   handleVisionFrame(frame: VisionFrameAnalysis) {
-    if (this.runtime.state === "completed") return this.getSnapshot();
+    if (this.runtime.state === "completed" || this.runtime.state === "paused") return this.getSnapshot();
 
     const result = this.detector.process(frame);
     this.runtime = {
@@ -79,13 +112,15 @@ export class BrewRuntimeController {
     };
 
     if (result.transition) {
-      this.runtime = reduceBrewRuntime(this.runtime, {
+      this.reduceEvent({
         type: result.transition,
         timestampMs: frame.timestampMs,
         source: "camera",
         confidence: frame.analysisConfidence,
       });
     }
+
+    this.reduceEvent({ type: "RUNTIME_TICK", timestampMs: frame.timestampMs });
 
     return this.publish();
   }
@@ -135,6 +170,17 @@ export class BrewRuntimeController {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeGuidance(listener: GuidanceListener) {
+    this.guidanceListeners.add(listener);
+    return () => this.guidanceListeners.delete(listener);
+  }
+
+  getGuidanceEvents(afterSequence = 0): BrewGuidanceEvent[] {
+    return this.runtime.guidanceEvents
+      .filter((event) => event.sequence > afterSequence)
+      .map(cloneGuidanceEvent);
+  }
+
   resetDetection() {
     this.detector.reset();
     this.runtime = {
@@ -149,8 +195,17 @@ export class BrewRuntimeController {
   }
 
   private dispatch(event: BrewRuntimeEvent, publish = true) {
-    this.runtime = reduceBrewRuntime(this.runtime, event);
+    this.reduceEvent(event);
     return publish ? this.publish() : this.getSnapshot();
+  }
+
+  private reduceEvent(event: BrewRuntimeEvent) {
+    const previousSequence = this.runtime.nextGuidanceSequence - 1;
+    this.runtime = reduceBrewRuntime(this.runtime, event);
+    const emitted = this.runtime.guidanceEvents.filter((item) => item.sequence > previousSequence);
+    for (const guidance of emitted) {
+      for (const listener of this.guidanceListeners) listener(cloneGuidanceEvent(guidance));
+    }
   }
 
   private publish(snapshot = this.getSnapshot()) {
