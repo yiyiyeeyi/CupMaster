@@ -16,6 +16,18 @@ const brewRow = () => toBrewInsert(userId, brew, 4);
 const planRow = () => toSuggestedPlanInsert(userId, plan, 5);
 
 describe("Cloud row mappers", () => {
+  it("normalizes a legacy fractional total before writing the integer SQL column", () => {
+    const legacy = { ...brew, actualTotalTimeSeconds: 9.99 };
+    expect(toBrewInsert(userId, legacy).actual_total_time_seconds).toBe(9);
+    expect(legacy.actualTotalTimeSeconds).toBe(9.99);
+  });
+  it("round-trips integer total seconds and fractional execution pauses without losing the run", () => {
+    const timed = { ...brew, actualTotalTimeSeconds: 9, accumulatedPauseSeconds: 7.125, executionRun: 2, currentStagePausedSeconds: 1.25 };
+    const row = toBrewInsert(userId, timed);
+    expect(row).toMatchObject({ actual_total_time_seconds: 9, accumulated_pause_seconds: 7.125, execution_run: 2, current_stage_paused_seconds: 1.25 });
+    expect(Number.isInteger(row.actual_total_time_seconds)).toBe(true);
+    expect(fromBrewRow(row).entity).toEqual(timed);
+  });
   it("maps Profile domain to an insert row", () => expect(profileRow()).toMatchObject({ id: userId, display_name: "Cloud Brewer", experience_level: "intermediate" }));
   it("maps a Profile row back to domain", () => expect(fromProfileRow(profileRow()).entity).toEqual(profile));
   it("rejects an invalid experience level", () => expect(() => fromProfileRow({ ...profileRow(), experience_level: "expert" })).toThrow(CloudMappingError));

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Brew, RecipeStep } from "@/domain";
 import { formatDuration } from "@/domain";
 import { BrewRuntimeController } from "@/application/brew-runtime/brew-runtime-controller";
+import { GuidedBrewPersistenceService, type GuidedBrewClockAnchor } from "@/application/brew-runtime/guided-brew-persistence";
 import { GuidedBrewResourceScope, GuidedBrewV1Session, type GuidedBrewStartSource } from "@/application/brew-runtime/guided-brew-v1-session";
 import { BrewSessionCoordinator } from "@/application/brew-session-coordinator";
 import { BrewService } from "@/application/brew-service";
@@ -14,12 +15,13 @@ import { CameraCaptureService, FrameAnalysisService, FrameSampler, type CameraCa
 import { isWebVoiceStartSupported, WebGuidanceVoiceAdapter, WebVoiceStartAdapter } from "@/infrastructure/voice";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
+import { BrewBackButton } from "./brew-back-button";
 import { guidedBrewCopy as copy } from "./guided-brew-copy";
 
 const DRIPPER_REGION: Readonly<NormalizedRect> = { x: 0.2, y: 0.22, width: 0.6, height: 0.5 };
 
 function monotonicNow() {
-  return performance.now();
+  return Math.floor(performance.now());
 }
 
 function withFallbackGuidance(steps: readonly RecipeStep[]): RecipeStep[] {
@@ -53,6 +55,8 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const samplerRef = useRef<FrameSampler | null>(null);
   const samplerUnsubscribeRef = useRef<(() => void) | null>(null);
   const cameraRequestRef = useRef(0);
+  const executionAnchorRef = useRef<GuidedBrewClockAnchor | null>(null);
+  const executionSaveErrorRef = useRef<string | null>(null);
   const startLock = useRef(false);
   const voiceStartRef = useRef<WebVoiceStartAdapter | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,24 +66,17 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const [camera] = useState(() => new CameraCaptureService());
   const [analyzer] = useState(() => new FrameAnalysisService({ roi: { ...DRIPPER_REGION } }));
   const [voice] = useState(() => new WebGuidanceVoiceAdapter({ language: "zh-TW", enabled: true }));
+  const [executionPersistence] = useState(() => new GuidedBrewPersistenceService(new LocalBrewRepository()));
   const [session] = useState(() => {
     const recipe = createBrewRuntimeRecipeDefinition({
       recipeId: brew.recipeSnapshot.sourceRecipeId ?? brew.sourceRecipeId,
       recipeName: brew.recipeSnapshot.title,
       steps: withFallbackGuidance([...brew.recipeSnapshot.steps].sort((left, right) => left.order - right.order)),
     });
-    const runtime = new BrewRuntimeController({ sessionId: `guided:${brew.id}`, recipe, mode: "manual" });
+    const runtime = new BrewRuntimeController({ sessionId: `guided:${brew.id}`, recipe, mode: "manual", runNumber: brew.executionRun ?? 1 });
     return new GuidedBrewV1Session({
       runtime,
       voice,
-      onStageCompleted: (stageIndex) => {
-        const result = new BrewService(new LocalBrewRepository()).completeCurrentStage(brew.id, stageIndex);
-        if (!result.ok) setNotice(`Stage completed in the guide, but local save failed: ${result.message}`);
-      },
-      onCompleted: () => {
-        const result = new BrewService(new LocalBrewRepository()).completeBrewSession(brew.id);
-        setNotice(result.ok ? "Brew completed and saved locally as a draft." : `Brew completed, but local save failed: ${result.message}`);
-      },
     });
   });
   const [snapshot, setSnapshot] = useState(() => session.getSnapshot());
@@ -100,11 +97,18 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       startLock.current = false;
       return;
     }
-    const started = session.start(source, monotonicNow());
+    if (result.resumed) {
+      setNotice(copy.alreadyRunning);
+      startLock.current = false;
+      return;
+    }
+    const timestampMs = monotonicNow();
+    executionAnchorRef.current = { wallTimeMs: Date.parse(result.brew.startedAt ?? ""), runtimeTimeMs: timestampMs };
+    const started = session.start(source, timestampMs);
     setVoiceListening(false);
-    setNotice(started
+    setNotice(executionSaveErrorRef.current ?? (started
       ? current.mode === "timer_voice" ? copy.startTimerVoice : copy.startCamera
-      : copy.duplicateStart);
+      : copy.duplicateStart));
     startLock.current = false;
   }, [brew.id, camera, session]);
   const stopCamera = useCallback(() => {
@@ -165,6 +169,14 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     voiceStartRef.current = voiceStart;
     const unsubscribeSession = session.subscribe(setSnapshot);
     const unsubscribeCamera = camera.subscribe(setCameraSnapshot);
+    const unsubscribeExecution = session.subscribeExecution((execution) => {
+      const anchor = executionAnchorRef.current;
+      if (anchor === null) return;
+      const result = executionPersistence.persist(brew.id, execution, anchor);
+      executionSaveErrorRef.current = result.ok ? null : `${copy.timingSaveFailed} ${result.message}`;
+      if (!result.ok) setNotice(`${copy.timingSaveFailed} ${result.message}`);
+      else if (execution.phase === "COMPLETED") setNotice(copy.completedLocally);
+    });
     const startTimer = window.setTimeout(() => {
       if (session.getSnapshot().mode === "camera") void startCamera();
     }, 0);
@@ -181,11 +193,12 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     });
     resources.add(unsubscribeCamera);
     resources.add(unsubscribeSession);
+    resources.add(unsubscribeExecution);
     return () => {
       window.clearTimeout(startTimer);
       resources.dispose();
     };
-  }, [camera, session, startCamera, startGuidedBrew, stopCamera]);
+  }, [brew.id, camera, executionPersistence, session, startCamera, startGuidedBrew, stopCamera]);
 
   useEffect(() => {
     if (snapshot.phase !== "BREWING") return;
@@ -199,18 +212,9 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     setNotice(active ? "Listening for「開始」. Touch start remains available." : "Voice start is unavailable in this browser. Use touch start.");
   }
 
-  function restartBeforeFirstTransition() {
-    voiceStartRef.current?.stop();
-    setVoiceListening(false);
-    analyzer.reset();
-    session.restart(monotonicNow());
-    setNotice(session.getSnapshot().mode === "timer_voice" ? copy.restartTimerVoice : copy.restartCamera);
-  }
-
   const runtime = snapshot.runtime;
   const stageIndex = runtime.currentStageIndex ?? 0;
   const currentStage = runtime.recipe.stages[stageIndex];
-  const completedStages = runtime.stages.filter((stage) => stage.completed).length;
   const guidance = snapshot.currentGuidance?.message
     ?? currentStage?.guidance?.start
     ?? "Position the dripper and prepare to brew.";
@@ -220,14 +224,13 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       : snapshot.phase === "READY" ? "Ready to start by touch or voice."
         : snapshot.phase === "BREWING" ? "Guided brew running"
           : "Recipe complete";
-  const canRestart = snapshot.phase === "BREWING" && completedStages === 0;
   const withoutCamera = snapshot.mode === "timer_voice";
   const isSetup = snapshot.phase !== "BREWING" && snapshot.phase !== "COMPLETED";
 
   return (
     <main className="guided-brew-page">
       <div className="live-topbar">
-        <Link aria-label="Back to Quick Prepare" className="back-link" href={`/recipes/${brew.sourceRecipeId}/prepare`}>←</Link>
+        <BrewBackButton brewId={brew.id} onLeaving={() => { executionAnchorRef.current = null; session.dispose(); voiceStartRef.current?.stop(); stopCamera(); }} />
         <h1>Guided Brew</h1>
         <span className={`guided-status guided-status-${snapshot.phase.toLowerCase()}`}>{snapshot.phase}</span>
       </div>
@@ -288,7 +291,6 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
           {runtime.state === "paused"
             ? <button className="secondary-button" type="button" onClick={() => session.resume(monotonicNow())}>Resume</button>
             : <button className="secondary-button" type="button" onClick={() => session.pause(monotonicNow())}>Pause</button>}
-          <button className="secondary-button" type="button" disabled={!canRestart} onClick={restartBeforeFirstTransition}>Restart setup</button>
         </> : null}
         {snapshot.phase === "COMPLETED" ? <>
           <Link className="primary-button" href={`/brew/${brew.id}/complete`}>Continue to Brew Complete</Link>

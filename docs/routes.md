@@ -1,5 +1,14 @@
 # Routes
 
+REQ-4 synchronizes Guided Brew pause/resume, stage/completion timing and
+same-Brew execution clearing with local storage. Restart setup is removed;
+App Back confirms 是／否 during execution. Yes clears execution and routes to
+`/brew/[brewId]/prepare`, preserving the same Brew and parameters; No/Escape
+keeps execution running. Write failure stays on Live Brew with the data intact.
+Reloaded paused Brews continue through the existing manual route view with
+frozen timers and Resume. Guided camera/voice-session reconstruction is not
+part of this requirement. See `docs/brew-state-machine.md`.
+
 REQ-3 updates the existing `/brew/[brewId]` guided setup without adding routes:
 camera denial, unsupported capture, acquisition errors or preview failure fall
 back to timer/voice guidance. The existing action area also offers

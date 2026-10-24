@@ -1,4 +1,14 @@
 export const guidedBrewCopy = {
+  backToPrepare: "返回 Quick Prepare",
+  returnQuestion: "沖煮中，返回將會遺失數據，確認返回？",
+  returnYes: "是",
+  returnNo: "否",
+  returnFailed: "無法清除本次執行，已保留沖煮進度，請重試。",
+  resumeBrew: "繼續沖煮",
+  alreadyRunning: "這筆 Brew 已在其他操作中開始，請重新載入以繼續原有進度。",
+  timingSaveFailed: "沖煮進度尚未成功儲存。",
+  completedLocally: "沖煮完成，已存為本機草稿。",
+  planResetSyncFailed: "本次執行已清除，但 Next Try 狀態未能同步；請再次返回準備頁並確認參數。",
   cameraLabel: "相機輔助",
   timerVoiceLabel: "無相機模式・計時與語音",
   cameraHeading: "對齊濾杯",
@@ -17,6 +27,4 @@ export const guidedBrewCopy = {
   startTimerVoice: "已開始沖煮，目前使用計時與語音引導。",
   startCamera: "已開始沖煮，相機預覽持續啟用。",
   duplicateStart: "沖煮已開始，已略過重複的開始操作。",
-  restartTimerVoice: "已重設引導，目前使用計時與語音。",
-  restartCamera: "已重設引導，請重新確認濾杯位置。",
 } as const;

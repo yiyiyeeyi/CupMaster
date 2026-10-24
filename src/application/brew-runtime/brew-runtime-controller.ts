@@ -16,6 +16,7 @@ export interface BrewRuntimeControllerOptions {
   recipe: BrewRecipeRuntimeDefinition;
   mode?: BrewRuntimeMode;
   thresholds?: PourDetectionThresholds;
+  runNumber?: number;
 }
 
 type RuntimeListener = (snapshot: BrewSessionRuntime) => void;
@@ -67,6 +68,7 @@ export class BrewRuntimeController {
       sessionId: options.sessionId,
       recipe: options.recipe,
       mode: options.mode ?? "camera_assisted",
+      runNumber: options.runNumber,
     });
     this.detector = new PourDetectionService(options.thresholds);
   }
@@ -94,6 +96,11 @@ export class BrewRuntimeController {
   restart(timestampMs: number) {
     this.detector.reset();
     return this.dispatch({ type: "SESSION_RESTARTED", timestampMs });
+  }
+
+  reset(timestampMs: number) {
+    this.detector.reset();
+    return this.dispatch({ type: "SESSION_RESET", timestampMs });
   }
 
   handleVisionFrame(frame: VisionFrameAnalysis) {

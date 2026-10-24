@@ -17,6 +17,8 @@ export type Database = {
       brews: {
         Row: {
           accumulated_pause_seconds: number
+          execution_run: number | null
+          current_stage_paused_seconds: number | null
           actual_total_time_seconds: number | null
           actual_total_water: number | null
           analysis: Json | null
@@ -53,6 +55,8 @@ export type Database = {
         }
         Insert: {
           accumulated_pause_seconds?: number
+          execution_run?: number | null
+          current_stage_paused_seconds?: number | null
           actual_total_time_seconds?: number | null
           actual_total_water?: number | null
           analysis?: Json | null
@@ -89,6 +93,8 @@ export type Database = {
         }
         Update: {
           accumulated_pause_seconds?: number
+          execution_run?: number | null
+          current_stage_paused_seconds?: number | null
           actual_total_time_seconds?: number | null
           actual_total_water?: number | null
           analysis?: Json | null

@@ -28,6 +28,7 @@ export interface GuidedBrewV1SessionOptions {
   voice: GuidanceVoicePort;
   onStageCompleted?: (stageIndex: number) => void;
   onCompleted?: () => void;
+  onExecutionChanged?: (snapshot: GuidedBrewV1Snapshot) => void;
 }
 
 type GuidedBrewListener = (snapshot: GuidedBrewV1Snapshot) => void;
@@ -38,7 +39,9 @@ export class GuidedBrewV1Session {
   private readonly voice: GuidanceVoicePort;
   private readonly onStageCompleted: ((stageIndex: number) => void) | undefined;
   private readonly onCompleted: (() => void) | undefined;
+  private readonly onExecutionChanged: ((snapshot: GuidedBrewV1Snapshot) => void) | undefined;
   private readonly listeners = new Set<GuidedBrewListener>();
+  private readonly executionListeners = new Set<GuidedBrewListener>();
   private readonly notifiedStageIndexes = new Set<number>();
   private unsubscribeGuidance: (() => void) | undefined;
   private started = false;
@@ -54,6 +57,7 @@ export class GuidedBrewV1Session {
     this.voice = options.voice;
     this.onStageCompleted = options.onStageCompleted;
     this.onCompleted = options.onCompleted;
+    this.onExecutionChanged = options.onExecutionChanged;
     this.activate();
   }
 
@@ -90,6 +94,7 @@ export class GuidedBrewV1Session {
     this.lastTimestampMs = timestampMs;
     this.runtime.start(timestampMs);
     this.runtime.manualPourStart(timestampMs);
+    this.publishExecution();
     this.publish();
     return true;
   }
@@ -110,7 +115,6 @@ export class GuidedBrewV1Session {
       if (targetMs !== undefined && activeElapsedMs >= targetMs) {
         this.runtime.manualPourStop(timestampMs);
         const stopped = this.runtime.getSnapshot();
-        this.notifyTransitions(stopped);
         if (stopped.state === "paused_between_pours") this.runtime.manualPourStart(timestampMs);
       }
     }
@@ -120,20 +124,26 @@ export class GuidedBrewV1Session {
   }
 
   pause(timestampMs: number): GuidedBrewV1Snapshot {
+    timestampMs = Math.max(timestampMs, this.lastTimestampMs);
+    const previous = this.runtime.getSnapshot().state;
     if (this.started) this.runtime.pause(timestampMs);
     this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
+    if (this.runtime.getSnapshot().state !== previous) this.publishExecution();
     return this.publish();
   }
 
   resume(timestampMs: number): GuidedBrewV1Snapshot {
+    timestampMs = Math.max(timestampMs, this.lastTimestampMs);
+    const previous = this.runtime.getSnapshot().state;
     if (this.started) this.runtime.resume(timestampMs);
     this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
+    if (this.runtime.getSnapshot().state !== previous) this.publishExecution();
     return this.publish();
   }
 
   restart(timestampMs: number): GuidedBrewV1Snapshot {
     this.voice.cancel();
-    this.runtime.restart(timestampMs);
+    this.runtime.reset(timestampMs);
     this.positioning.reset();
     this.notifiedStageIndexes.clear();
     this.started = false;
@@ -160,14 +170,16 @@ export class GuidedBrewV1Session {
     const targetMs = runtime.currentStageIndex === null
       ? undefined
       : runtime.recipe.stages[runtime.currentStageIndex]?.targetPourDurationMs;
-    const currentSessionPauseMs = runtime.pausedAtMs === undefined ? 0 : this.lastTimestampMs - runtime.pausedAtMs;
+    const endTimestampMs = runtime.completedAtMs ?? this.lastTimestampMs;
+    const stageTimestampMs = currentStage?.endedAtMs ?? endTimestampMs;
+    const currentSessionPauseMs = runtime.pausedAtMs === undefined ? 0 : endTimestampMs - runtime.pausedAtMs;
     const elapsedMs = runtime.startedAtMs === undefined
       ? 0
-      : Math.max(0, this.lastTimestampMs - runtime.startedAtMs - runtime.accumulatedPauseMs - currentSessionPauseMs);
-    const ongoingPauseMs = currentStage?.pausedAtMs === undefined ? 0 : this.lastTimestampMs - currentStage.pausedAtMs;
+      : Math.max(0, endTimestampMs - runtime.startedAtMs - runtime.accumulatedPauseMs - currentSessionPauseMs);
+    const ongoingPauseMs = currentStage?.pausedAtMs === undefined ? 0 : stageTimestampMs - currentStage.pausedAtMs;
     const stageElapsedMs = currentStage?.startedAtMs === undefined
       ? 0
-      : Math.max(0, this.lastTimestampMs - currentStage.startedAtMs - currentStage.pausedDurationMs - ongoingPauseMs);
+      : Math.max(0, stageTimestampMs - currentStage.startedAtMs - currentStage.pausedDurationMs - ongoingPauseMs);
     return {
       mode: this.mode,
       phase: runtime.state === "completed" ? "COMPLETED" : this.started ? "BREWING"
@@ -188,24 +200,40 @@ export class GuidedBrewV1Session {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeExecution(listener: GuidedBrewListener): () => void {
+    this.executionListeners.add(listener);
+    return () => this.executionListeners.delete(listener);
+  }
+
   dispose(): void {
     this.unsubscribeGuidance?.();
     this.unsubscribeGuidance = undefined;
     this.voice.dispose();
     this.listeners.clear();
+    this.executionListeners.clear();
   }
 
   private notifyTransitions(runtime: BrewSessionRuntime): void {
+    let changed = false;
     for (let index = 0; index < runtime.stages.length; index += 1) {
       if (runtime.stages[index]?.completed && !this.notifiedStageIndexes.has(index)) {
         this.notifiedStageIndexes.add(index);
+        changed = true;
         this.onStageCompleted?.(index);
       }
     }
     if (runtime.state === "completed" && !this.completionNotified) {
       this.completionNotified = true;
+      changed = true;
       this.onCompleted?.();
     }
+    if (changed) this.publishExecution();
+  }
+
+  private publishExecution(): void {
+    const snapshot = this.getSnapshot();
+    this.onExecutionChanged?.(snapshot);
+    for (const listener of this.executionListeners) listener(snapshot);
   }
 
   private publish(): GuidedBrewV1Snapshot {

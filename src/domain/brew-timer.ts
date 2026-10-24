@@ -4,15 +4,19 @@ function timestampMs(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function calculateElapsedSeconds(startedAt: string | null, accumulatedPauseSeconds = 0, nowMs = Date.now()): number {
+export function calculateActiveSeconds(startedAt: string | null, accumulatedPauseSeconds = 0, nowMs = Date.now()): number {
   const start = timestampMs(startedAt);
   if (start === null || !Number.isFinite(nowMs)) return 0;
   const pause = Number.isFinite(accumulatedPauseSeconds) ? Math.max(0, accumulatedPauseSeconds) : 0;
-  return Math.max(0, Math.floor((nowMs - start) / 1000) - pause);
+  return Math.max(0, (nowMs - start) / 1000 - pause);
 }
 
-export function calculateStageElapsedSeconds(currentStageStartedAt: string | null, nowMs = Date.now()): number {
-  return calculateElapsedSeconds(currentStageStartedAt, 0, nowMs);
+export function calculateElapsedSeconds(startedAt: string | null, accumulatedPauseSeconds = 0, nowMs = Date.now()): number {
+  return Math.floor(calculateActiveSeconds(startedAt, accumulatedPauseSeconds, nowMs));
+}
+
+export function calculateStageElapsedSeconds(currentStageStartedAt: string | null, nowMs = Date.now(), accumulatedPauseSeconds = 0): number {
+  return calculateElapsedSeconds(currentStageStartedAt, accumulatedPauseSeconds, nowMs);
 }
 
 export function formatDuration(totalSeconds: number): string {

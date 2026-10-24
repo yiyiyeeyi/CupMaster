@@ -1,0 +1,23 @@
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--ink);
+  margin: auto;
+  max-height: calc(100dvh - 2rem);
+  max-width: 24rem;
+  overflow: auto;
+  padding: 1.25rem;
+  width: calc(100% - 2rem);
+}
+
+.dialog::backdrop {
+  background: rgb(33 26 22 / 50%);
+}
+
+.actions {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1.25rem;
+}

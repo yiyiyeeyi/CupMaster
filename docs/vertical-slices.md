@@ -1,5 +1,20 @@
 # Vertical Slices
 
+## Current implementation note — REQ-4 execution consistency
+
+Guided Brew's visible and persisted times come from the same runtime observations,
+including fractional pauses, measured stage durations, and frozen completion.
+App Back (confirmed Yes) clears only the same draft's execution and stage results; Brew ID,
+Snapshot and BrewPlan are preserved. Waiting to start again is excluded. After a
+paused-page reload, the existing manual continuation resumes with persisted pause
+accounting. No layout redesign, retry outbox, or full guided reload restoration is
+included. Source Suggested Plan state is realigned via its existing explicit repair
+service when the user confirms returning to preparation. Restart setup is removed.
+Completed total seconds are floored after subtracting pauses; stage/pause values
+retain fractional precision. SQL migration and cloud mappers preserve pause/run
+metadata. REQ-35 will extend reload behavior with elapsed wall time, 30-minute
+expiry and Screen Wake Lock; those changes are not included in REQ-4.
+
 ## Current implementation note — REQ-3 optional camera
 
 Vertical Slice 1's existing Guided Brew now supports timer/voice mode without

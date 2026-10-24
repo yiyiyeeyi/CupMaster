@@ -1,9 +1,10 @@
 import type { Brew, BrewQuickRating, BrewRecordDetailsInput, BrewStageResult, FlavorFeedback, FlavorFeedbackInput, QuickPrepareInput, Recipe } from "@/domain";
 import { quickPrepareSchema } from "@/domain";
-import { assessAnalysisDataQuality, brewAnalysisResultSchema, buildBrewAnalysisInput, brewRecordDetailsInputSchema, calculateElapsedSeconds, calculateStageElapsedSeconds, createAnalysisFingerprint, flavorFeedbackInputSchema, normalizeBrewRecordDetailsInput } from "@/domain";
+import { assessAnalysisDataQuality, brewAnalysisResultSchema, buildBrewAnalysisInput, brewRecordDetailsInputSchema, createAnalysisFingerprint, flavorFeedbackInputSchema, normalizeBrewRecordDetailsInput } from "@/domain";
 import { createBrewDraft, createUniqueId } from "./brew-factory";
 import type { BrewAnalysisProvider } from "./brew-analysis-provider";
 import { RuleBasedBrewAnalysisProvider } from "./rule-based-brew-analysis-provider";
+import { calculateActiveSeconds } from "@/domain/brew-timer";
 import type { BrewRepository, BrewWriteResult } from "@/repositories/brew-repository";
 
 export type BrewDomainErrorCode = "brew_not_found" | "invalid_execution_status" | "no_stages" | "invalid_stage_order" | "duplicate_stage_completion" | "stages_incomplete" | "already_completed" | "already_saved" | "invalid_quick_rating" | "invalid_feedback" | "feedback_not_found" | "already_skipped" | "invalid_record_details" | "analysis_already_pending" | "invalid_analysis_input" | "invalid_analysis_result" | "analysis_provider_failed" | "persistence_failed";
@@ -45,6 +46,48 @@ export class BrewService {
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
+  restartBrewSession(brewId: string, expectedRun: number): BrewOperationResult {
+    const read = this.repository.getById(brewId);
+    if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };
+    const brew = read.value;
+    if (!brew) return { ok: false, code: "brew_not_found", message: "找不到這筆 Brew。" };
+    if (brew.recordStatus !== "draft" || !["in_progress", "paused"].includes(brew.executionStatus)
+      || (brew.executionRun ?? 1) !== expectedRun) {
+      return { ok: false, code: "invalid_execution_status", message: "這筆 Brew 的狀態已改變，無法重來。", latest: brew };
+    }
+    const updated: Brew = {
+      ...brew, executionRun: expectedRun + 1, executionStatus: "not_started",
+      startedAt: null, completedAt: null, pausedAt: null, accumulatedPauseSeconds: 0,
+      currentStageOrder: 0, currentStageStartedAt: null, currentStagePausedSeconds: 0,
+      stageResults: [], actualTotalTimeSeconds: null, updatedAt: this.now(),
+    };
+    const written = this.repository.updateDraft(updated);
+    return written.ok ? { ok: true, value: written.value }
+      : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
+  }
+
+  resumeBrewSession(brewId: string): BrewOperationResult {
+    const read = this.repository.getById(brewId);
+    if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };
+    const brew = read.value;
+    if (!brew) return { ok: false, code: "brew_not_found", message: "找不到這筆 Brew。" };
+    if (brew.executionStatus === "in_progress") return { ok: true, value: brew, resumed: true };
+    const now = this.now();
+    const pauseMs = Date.parse(now) - Date.parse(brew.pausedAt ?? "");
+    if (brew.executionStatus !== "paused" || !Number.isFinite(pauseMs) || pauseMs < 0) {
+      return { ok: false, code: "invalid_execution_status", message: "這筆 Brew 無法繼續。", latest: brew };
+    }
+    const updated: Brew = {
+      ...brew, executionStatus: "in_progress", pausedAt: null,
+      accumulatedPauseSeconds: brew.accumulatedPauseSeconds + pauseMs / 1_000,
+      currentStagePausedSeconds: (brew.currentStagePausedSeconds ?? 0) + pauseMs / 1_000,
+      updatedAt: now,
+    };
+    const written = this.repository.updateDraft(updated);
+    return written.ok ? { ok: true, value: written.value, resumed: true }
+      : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
+  }
+
   completeCurrentStage(brewId: string, expectedStageOrder?: number): BrewOperationResult {
     const read = this.repository.getById(brewId);
     if (!read.ok && !read.value) return { ok: false, code: "persistence_failed", message: read.message };
@@ -58,8 +101,8 @@ export class BrewService {
     if (brew.stageResults.some((result) => result.stageOrder === brew.currentStageOrder || result.stageId === step.id)) return { ok: false, code: "duplicate_stage_completion", message: "This stage already has a saved result.", latest: brew };
     if (!brew.currentStageStartedAt) return { ok: false, code: "invalid_stage_order", message: "The active stage has no valid start timestamp.", latest: brew };
     const now = this.now();
-    const result: BrewStageResult = { stageOrder: brew.currentStageOrder, stageId: step.id, actualStartedAt: brew.currentStageStartedAt, actualCompletedAt: now, actualDurationSeconds: calculateStageElapsedSeconds(brew.currentStageStartedAt, Date.parse(now)), actualWeight: null, weightDifference: null, wasSkipped: false };
-    const updated: Brew = { ...brew, executionStatus: "in_progress", currentStageOrder: brew.currentStageOrder + 1, currentStageStartedAt: now, stageResults: [...brew.stageResults, result], updatedAt: now };
+    const result: BrewStageResult = { stageOrder: brew.currentStageOrder, stageId: step.id, actualStartedAt: brew.currentStageStartedAt, actualCompletedAt: now, actualDurationSeconds: calculateActiveSeconds(brew.currentStageStartedAt, brew.currentStagePausedSeconds ?? 0, Date.parse(now)), actualWeight: null, weightDifference: null, wasSkipped: false };
+    const updated: Brew = { ...brew, executionStatus: "in_progress", currentStageOrder: brew.currentStageOrder + 1, currentStageStartedAt: now, ...(brew.currentStagePausedSeconds !== undefined && { currentStagePausedSeconds: 0 }), stageResults: [...brew.stageResults, result], updatedAt: now };
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
@@ -75,7 +118,7 @@ export class BrewService {
     const hasEveryResult = steps.length > 0 && steps.every((step, index) => brew.stageResults.some((result) => result.stageOrder === index && result.stageId === step.id));
     if (!hasEveryResult || brew.currentStageOrder !== steps.length) return { ok: false, code: "stages_incomplete", message: "Complete every required stage before completing this Brew.", latest: brew };
     const now = this.now();
-    const actualTotalTimeSeconds = calculateElapsedSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now));
+    const actualTotalTimeSeconds = Math.floor(calculateActiveSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now)));
     const updated: Brew = { ...brew, executionStatus: "completed", completedAt: now, currentStageStartedAt: null, actualTotalTimeSeconds, actualTotalWater: null, recordStatus: "draft", analysisStatus: "not_requested", updatedAt: now };
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };

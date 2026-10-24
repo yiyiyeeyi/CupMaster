@@ -3,6 +3,17 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20260804061934_create_cupmaster_core.sql"), "utf8");
+const timingSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024110000_brew_execution_timing.sql"), "utf8");
+
+describe("REQ-4 timing migration", () => {
+  it("keeps completed total seconds integer and upgrades pause precision without rewriting records", () => {
+    expect(sql).toContain("actual_total_time_seconds integer null");
+    expect(timingSql).toContain("alter column accumulated_pause_seconds type numeric using accumulated_pause_seconds::numeric");
+    expect(timingSql).toContain("execution_run integer null check (execution_run is null or execution_run > 0)");
+    expect(timingSql).toContain("current_stage_paused_seconds numeric null");
+    expect(timingSql).not.toMatch(/drop|delete|truncate|disable row level security/i);
+  });
+});
 
 describe("Cloud 1 migration contract", () => {
   it("is non-empty", () => expect(sql.length).toBeGreaterThan(1000));

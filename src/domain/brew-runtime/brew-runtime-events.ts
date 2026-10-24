@@ -3,6 +3,7 @@ export type BrewRuntimeEvent =
   | { type: "SESSION_PAUSED"; timestampMs: number }
   | { type: "SESSION_RESUMED"; timestampMs: number }
   | { type: "SESSION_RESTARTED"; timestampMs: number }
+  | { type: "SESSION_RESET"; timestampMs: number }
   | { type: "CAMERA_READY"; timestampMs: number }
   | { type: "RUNTIME_TICK"; timestampMs: number }
   | { type: "POUR_STARTED"; timestampMs: number; source: "camera" | "manual"; confidence?: number }

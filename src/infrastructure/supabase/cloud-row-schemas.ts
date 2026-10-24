@@ -30,6 +30,8 @@ export const brewRowSchema = z.object({
   analysis: brewAnalysisSchema.nullable(), analysis_attempt: brewAnalysisAttemptSchema.nullable(),
   suggested_plan_handoff: z.unknown().nullable(), quick_rating: z.enum(["liked", "neutral", "disliked", "skipped"]).nullable(),
   current_stage_order: z.number().int().nonnegative(), accumulated_pause_seconds: z.number().nonnegative(),
+  execution_run: z.number().int().positive().nullable().optional(),
+  current_stage_paused_seconds: z.number().nonnegative().nullable().optional(),
   actual_total_time_seconds: z.number().nonnegative().nullable(), actual_total_water: z.number().nonnegative().nullable(),
   started_at: nullableTimestamp, current_stage_started_at: nullableTimestamp, paused_at: nullableTimestamp,
   completed_at: nullableTimestamp, ...activeRow,

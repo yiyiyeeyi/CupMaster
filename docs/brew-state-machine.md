@@ -1,5 +1,38 @@
 # Brew State Machine
 
+## Current implementation — REQ-4 execution timing
+
+Guided Brew uses one monotonic execution clock anchored to the persisted
+start timestamp. Pause/resume and stage/completion checkpoints project that
+runtime into the same Brew; recipe targets are never substituted for actual
+durations. Stage and pause seconds retain fractional precision; completed total
+seconds are floored after subtracting pauses, matching the integer SQL column.
+Total and final-stage timers freeze at completion.
+
+The Restart setup button is removed. App Back asks
+「沖煮中，返回將會遺失數據，確認返回？」 with 是／否. No/Escape leaves
+execution untouched. Yes resets an in-progress or paused draft by first persisting
+`not_started`, clears start/pause/completion time, accumulated/current-stage
+pause, results and actual total time, and increments the optional
+`executionRun`. It preserves Brew ID, Recipe Snapshot, BrewPlan and source
+metadata. Only after that write succeeds is the in-memory runtime reset to
+idle, then returns to `/brew/[brewId]/prepare` with the same parameters.
+Setup/positioning is untimed; a subsequent Start establishes a new clock
+anchor. Old-run checkpoints cannot overwrite the new run. A Suggested Plan
+source uses its existing explicit repair service to realign usage on restart.
+
+`currentStagePausedSeconds` and `executionRun` are backward-compatible optional
+local fields; old records use zero stage pause and run one. Stage results keep
+`wasSkipped:false`; no skip command, event or UI is part of REQ-4.
+
+Reloading a persisted paused Brew uses the existing manual continuation view:
+timers remain frozen at `pausedAt`, and Resume accounts for the entire pause
+before manual stage completion. It does not reconstruct a camera/voice session.
+The legacy manual flow retains its explicit Brew Complete action; its total
+stops at that action, while Guided Brew completes automatically with its final
+stage. Both use actual elapsed time minus pauses. Write-failure retry/outbox
+behavior remains REQ-27/5, outside this increment.
+
 Explicit Suggested Plan repair maps a `not_started` resulting Brew to Plan `draft` with `usedAt:null`; a started `in_progress`, `paused`, `completed`, or `abandoned` Brew maps to `used` with `usedAt === Brew.startedAt`. A started execution state without `startedAt`, duplicate Brew mapping, or conflicting Plan mapping is rejected rather than guessed. Page reads never trigger repair.
 
 Live Brew starts through `BrewSessionCoordinator`. A Brew start failure leaves it `not_started`; a later Plan sync failure leaves it `in_progress`, returns a non-blocking warning, and enables explicit Retry Sync. Reload derives sync-needed state from persisted Plan/Brew mapping rather than transient UI state.

@@ -275,7 +275,7 @@ export function reduceBrewRuntime(
   runtime: BrewSessionRuntime,
   event: BrewRuntimeEvent,
 ): BrewSessionRuntime {
-  if (event.type === "SESSION_RESTARTED") {
+  if (event.type === "SESSION_RESTARTED" || event.type === "SESSION_RESET") {
     const initial = createInitialBrewRuntime({
       sessionId: runtime.sessionId,
       recipe: runtime.recipe,
@@ -287,7 +287,8 @@ export function reduceBrewRuntime(
       guidanceEvents: runtime.guidanceEvents,
       nextGuidanceSequence: runtime.nextGuidanceSequence,
     };
-    return reduceBrewRuntime(restarted, { type: "SESSION_STARTED", timestampMs: event.timestampMs });
+    return event.type === "SESSION_RESET" ? restarted
+      : reduceBrewRuntime(restarted, { type: "SESSION_STARTED", timestampMs: event.timestampMs });
   }
   if (runtime.state === "completed") return runtime;
 
