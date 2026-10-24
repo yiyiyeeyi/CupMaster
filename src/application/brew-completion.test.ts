@@ -13,6 +13,16 @@ function stagesReady(repository: LocalBrewRepository, id = "brew-1") { let resul
 function complete(repository: LocalBrewRepository, id = "brew-1", now = "2026-07-18T01:00:30.000Z") { stagesReady(repository, id); return new BrewService(repository, { now: () => now }).completeBrewSession(id); }
 
 describe("Brew completion, Journal, and historical projection", () => {
+  it("saves the manual final stage without another completion or save action", () => {
+    const { repository } = setup();
+    const service = new BrewService(repository, { now: () => "2026-07-18T01:00:10.000Z" });
+    expect(service.startBrewSession("brew-1").ok).toBe(true);
+    const stages = recipe.currentVersion.steps.length;
+    for (let index = 0; index < stages; index++) expect(service.completeCurrentStage("brew-1", index, true).ok).toBe(true);
+    expect(repository.getById("brew-1").value).toMatchObject({ executionStatus: "completed", recordStatus: "saved", currentStageOrder: stages });
+    expect(repository.listJournalEntries().value).toHaveLength(1);
+    expect(service.completeCurrentStage("brew-1", stages - 1, true).ok).toBe(false);
+  });
   it("completes after every stage", () => { const { repository } = setup(); expect(complete(repository)).toMatchObject({ ok: true, value: { executionStatus: "completed" } }); });
   it("rejects incomplete stages", () => { const { repository } = setup(); new BrewService(repository).startBrewSession("brew-1"); expect(new BrewService(repository).completeBrewSession("brew-1")).toMatchObject({ ok: false, code: "stages_incomplete" }); });
   it("returns brew_not_found for completion", () => expect(new BrewService(new LocalBrewRepository(new MemoryStorage())).completeBrewSession("missing")).toMatchObject({ ok: false, code: "brew_not_found" }));
@@ -22,7 +32,7 @@ describe("Brew completion, Journal, and historical projection", () => {
   it("deducts accumulatedPauseSeconds", () => { const { repository } = setup(); const ready = stagesReady(repository); repository.updateDraft({ ...ready, accumulatedPauseSeconds: 5 }); const result = new BrewService(repository, { now: () => "2026-07-18T01:00:30.000Z" }).completeBrewSession("brew-1"); expect(result.ok && result.value.actualTotalTimeSeconds).toBe(25); });
   it("clears currentStageStartedAt", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.currentStageStartedAt).toBeNull(); });
   it("sets executionStatus completed", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.executionStatus).toBe("completed"); });
-  it("keeps recordStatus draft", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.recordStatus).toBe("draft"); });
+  it("saves recordStatus on completion", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.recordStatus).toBe("saved"); });
   it("keeps analysis not_requested", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.analysisStatus).toBe("not_requested"); });
   it("keeps actualTotalWater null", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.actualTotalWater).toBeNull(); });
   it("never copies target water into actual water", () => { const { repository } = setup(); const result = complete(repository); expect(result.ok && result.value.actualTotalWater).not.toBe(recipe.currentVersion.totalWaterGrams); });
@@ -32,23 +42,23 @@ describe("Brew completion, Journal, and historical projection", () => {
   it("saves without completed Flavor Feedback", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1"); expect(result.ok && result.value.feedbackStatus).toBe("awaiting_feedback"); });
   it("saves without Bean", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1"); expect(result.ok && result.value.recipeSnapshot.bean).toBeUndefined(); });
   it("saves without Equipment metadata", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1"); expect(result.ok && result.value.recipeSnapshot.equipment).toBeUndefined(); });
-  it("saves a legal quick rating", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1", { quickRating: "liked" }); expect(result.ok && result.value.quickRating).toBe("liked"); });
+  it("saves a legal quick rating", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1", { quickRating: "liked" }); expect(result.ok && result.value.flavorFeedback?.overallImpression).toBe("liked"); });
   it("rejects an illegal quick rating", () => { const { repository } = setup(); complete(repository); expect(new BrewService(repository).saveCompletedBrew("brew-1", { quickRating: "excellent" })).toMatchObject({ ok: false, code: "invalid_quick_rating" }); });
   it("maps an explicit skipped feeling to skipped feedback", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1", { quickRating: "skipped" }); expect(result.ok && result.value.feedbackStatus).toBe("skipped"); });
   it("saves without a quick rating", () => { const { repository } = setup(); complete(repository); const result = new BrewService(repository).saveCompletedBrew("brew-1"); expect(result.ok && result.value.quickRating).toBeUndefined(); });
-  it("does not update an already saved Brew", () => { const { repository } = setup(); complete(repository); new BrewService(repository).saveCompletedBrew("brew-1"); expect(new BrewService(repository).saveCompletedBrew("brew-1")).toMatchObject({ ok: false, code: "already_saved" }); });
+  it("is idempotent for an already saved Brew", () => { const { repository } = setup(); complete(repository); new BrewService(repository).saveCompletedBrew("brew-1"); expect(new BrewService(repository).saveCompletedBrew("brew-1")).toMatchObject({ ok: true, value: { recordStatus: "saved" } }); });
   it("maps completion persistence failure", () => { const { storage, repository } = setup(); stagesReady(repository); storage.failWrites = true; expect(new BrewService(repository).completeBrewSession("brew-1")).toMatchObject({ ok: false, code: "persistence_failed" }); });
-  it("maps save persistence failure", () => { const { storage, repository } = setup(); complete(repository); storage.failWrites = true; expect(new BrewService(repository).saveCompletedBrew("brew-1")).toMatchObject({ ok: false, code: "persistence_failed" }); });
+  it("maps impression persistence failure", () => { const { storage, repository } = setup(); complete(repository); storage.failWrites = true; expect(new BrewService(repository).setOverallImpression("brew-1", "liked")).toMatchObject({ ok: false, code: "persistence_failed" }); });
   it("Journal excludes unfinished Brews", () => { const { repository } = setup(); expect(repository.listJournalEntries().value).toHaveLength(0); });
   it("sorts Journal by completedAt descending", () => { const { repository } = setup(); repository.createDraft(draft("brew-2")); complete(repository, "brew-1", "2026-07-18T02:00:00.000Z"); complete(repository, "brew-2", "2026-07-18T03:00:00.000Z"); expect(repository.listJournalEntries().value.map((item) => item.id)).toEqual(["brew-2", "brew-1"]); });
-  it("keeps completed drafts visible", () => { const { repository } = setup(); complete(repository); expect(repository.listJournalEntries().value[0].recordStatus).toBe("draft"); });
+  it("automatically saves completed Brews", () => { const { repository } = setup(); complete(repository); expect(repository.listJournalEntries().value[0].recordStatus).toBe("saved"); });
   it("shows saved Brews in Journal", () => { const { repository } = setup(); complete(repository); new BrewService(repository).saveCompletedBrew("brew-1"); expect(repository.listJournalEntries().value[0].recordStatus).toBe("saved"); });
   it("projects the same Brew id instead of creating a Journal copy", () => { const { repository } = setup(); complete(repository); expect(repository.listJournalEntries().value[0].id).toBe(repository.getById("brew-1").value?.id); });
   it("Brew Detail data comes from the Snapshot", () => { const { repository } = setup(); complete(repository); expect(repository.getById("brew-1").value?.recipeSnapshot.title).toBe(recipe.currentVersion.title); });
   it("source Recipe changes do not alter Brew Detail history", () => { const copy = structuredClone(recipe); const storage = new MemoryStorage(); const repository = new LocalBrewRepository(storage); repository.createDraft(createBrewDraft(copy, createQuickPrepareDefaults(copy), { now: () => "2026-07-18T01:00:00.000Z", createId: () => "history" })); copy.currentVersion.title = "Changed later"; expect(repository.getById("history").value?.recipeSnapshot.title).not.toBe("Changed later"); });
   it("calculates stage duration differences", () => expect(calculateStageDurationDifference(47, 45)).toBe(2));
   it("formats missing actual weight safely", () => expect(formatOptionalWeightDifference(null, 40)).toBe("—"));
-  it("recovers completed drafts after reload", () => { const { storage, repository } = setup(); complete(repository); expect(new LocalBrewRepository(storage).getById("brew-1").value).toMatchObject({ executionStatus: "completed", recordStatus: "draft" }); });
+  it("recovers automatically saved completion after reload", () => { const { storage, repository } = setup(); complete(repository); expect(new LocalBrewRepository(storage).getById("brew-1").value).toMatchObject({ executionStatus: "completed", recordStatus: "saved" }); });
   it("recovers saved Brews after reload", () => { const { storage, repository } = setup(); complete(repository); new BrewService(repository).saveCompletedBrew("brew-1"); expect(new LocalBrewRepository(storage).getById("brew-1").value?.recordStatus).toBe("saved"); });
   it("returns null for a missing Brew Detail id", () => expect(new LocalBrewRepository(new MemoryStorage()).getById("missing").value).toBeNull());
   it("formats signed time differences", () => { expect(formatSignedDuration(2)).toBe("+0:02"); expect(formatSignedDuration(-3)).toBe("-0:03"); expect(formatSignedDuration(0)).toBe("0:00"); });

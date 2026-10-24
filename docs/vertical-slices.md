@@ -139,3 +139,19 @@ The analysis preview increment adds Brew Detail → Request Preview Analysis →
 - **後端需求：** authenticated collection CRUD, uniqueness/idempotency, recipe availability handling.
 
 Cloud 4-3 is QA infrastructure, not a new product slice: deterministic Local smoke graph, read-only remote preflight, checkpoint inspection, fake-gateway recovery tests, and a manual real-Supabase protocol. Cloud 5 has not started.
+
+## REQ-36 — automatic saving and Brew Detail (review delivery)
+
+- Last timed Guided stage saves execution and record atomically, then opens the
+  existing Brew Detail with its just-completed result table and quick feeling.
+  Manual continuation saves on the final Complete Stage action as well.
+- No Save Brew or completed-draft UI remains. The legacy Summary URL redirects
+  to Detail. Journal's To Brew screen remains journey 04; Next Try replacement
+  is REQ-37 and has not started.
+- Quick feeling and Flavor Feedback share flavorFeedback.overallImpression.
+  Legacy completed drafts and quickRating normalize locally and through cloud
+  mappers without changing Snapshot identity or dropping damaged entries.
+- Explicit final-write retry preserves the measured in-memory completion. Durable
+  outbox/automatic retry (REQ-27/REQ-5) is still out of scope. The REQ-4 local
+  Supabase migration deployment gate remains in force.
+- Detail: docs/project/req-36-auto-save-detail.md.

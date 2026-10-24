@@ -22,7 +22,7 @@ export function toBrewInsert(userId: string, brew: Brew, revision = 1): TablesIn
     analysis: value.analysis ? json(value.analysis) : null,
     analysis_attempt: value.analysisAttempt ? json(value.analysisAttempt) : null,
     suggested_plan_handoff: value.suggestedPlanHandoff ? json(value.suggestedPlanHandoff) : null,
-    quick_rating: value.quickRating ?? null, current_stage_order: value.currentStageOrder,
+    quick_rating: null, current_stage_order: value.currentStageOrder,
     accumulated_pause_seconds: value.accumulatedPauseSeconds,
     execution_run: value.executionRun ?? null,
     current_stage_paused_seconds: value.currentStagePausedSeconds ?? null,

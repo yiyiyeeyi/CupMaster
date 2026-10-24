@@ -56,6 +56,21 @@ function setup(autoPersist = true) {
 }
 
 describe("Guided Brew execution persistence", () => {
+  it("atomically saves completion and can retry a blocked final write using the same measured snapshot", () => {
+    const { session, persistence, read, draft, storage, repository } = setup(false);
+    session.start("TOUCH", 1_000); session.tick(6_000); session.tick(11_000);
+    const anchor = { wallTimeMs: wallStart, runtimeTimeMs: 1_000 };
+    storage.fail = true;
+    expect(persistence.persist(draft.id, session.getSnapshot(), anchor)).toMatchObject({ ok: false, code: "persistence_failed" });
+    expect(read().executionStatus).toBe("in_progress");
+    storage.fail = false;
+    expect(persistence.persist(draft.id, session.getSnapshot(), anchor)).toMatchObject({ ok: true, value: { recordStatus: "saved", actualTotalTimeSeconds: 10 } });
+    const completed = read();
+    expect(persistence.persist(draft.id, session.getSnapshot(), anchor)).toMatchObject({ ok: true });
+    expect(read()).toEqual(completed);
+    expect(repository.listJournalEntries().value).toHaveLength(1);
+    session.dispose();
+  });
   it("catches up and keeps running when foreground inspection fails, then retries persisted inspection", () => {
     const { session, read, storage, repository, draft } = setup();
     const interruption = new BrewInterruptionService(repository, new LocalLiveBrewRepository(storage), () => wallStart + 8_000);

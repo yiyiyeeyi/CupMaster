@@ -88,7 +88,7 @@ export class BrewService {
       : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
-  completeCurrentStage(brewId: string, expectedStageOrder?: number): BrewOperationResult {
+  completeCurrentStage(brewId: string, expectedStageOrder?: number, completeOnLast = false): BrewOperationResult {
     const read = this.repository.getById(brewId);
     if (!read.ok && !read.value) return { ok: false, code: "persistence_failed", message: read.message };
     const brew = read.value;
@@ -103,6 +103,14 @@ export class BrewService {
     const now = this.now();
     const result: BrewStageResult = { stageOrder: brew.currentStageOrder, stageId: step.id, actualStartedAt: brew.currentStageStartedAt, actualCompletedAt: now, actualDurationSeconds: calculateActiveSeconds(brew.currentStageStartedAt, brew.currentStagePausedSeconds ?? 0, Date.parse(now)), actualWeight: null, weightDifference: null, wasSkipped: false };
     const updated: Brew = { ...brew, executionStatus: "in_progress", currentStageOrder: brew.currentStageOrder + 1, currentStageStartedAt: now, ...(brew.currentStagePausedSeconds !== undefined && { currentStagePausedSeconds: 0 }), stageResults: [...brew.stageResults, result], updatedAt: now };
+      if (completeOnLast && updated.currentStageOrder === steps.length) {
+        updated.executionStatus = "completed";
+        updated.recordStatus = "saved";
+        updated.feedbackStatus = "awaiting_feedback";
+        updated.completedAt = now;
+        updated.currentStageStartedAt = null;
+        updated.actualTotalTimeSeconds = Math.floor(calculateActiveSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now)));
+      }
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
@@ -119,22 +127,23 @@ export class BrewService {
     if (!hasEveryResult || brew.currentStageOrder !== steps.length) return { ok: false, code: "stages_incomplete", message: "Complete every required stage before completing this Brew.", latest: brew };
     const now = this.now();
     const actualTotalTimeSeconds = Math.floor(calculateActiveSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now)));
-    const updated: Brew = { ...brew, executionStatus: "completed", completedAt: now, currentStageStartedAt: null, actualTotalTimeSeconds, actualTotalWater: null, recordStatus: "draft", analysisStatus: "not_requested", updatedAt: now };
+    const updated: Brew = { ...brew, executionStatus: "completed", completedAt: now, currentStageStartedAt: null, actualTotalTimeSeconds, actualTotalWater: null, recordStatus: "saved", feedbackStatus: "awaiting_feedback", analysisStatus: "not_requested", updatedAt: now };
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
   saveCompletedBrew(brewId: string, input: { quickRating?: string } = {}): BrewOperationResult {
     const read = this.repository.getById(brewId);
-    if (!read.ok && !read.value) return { ok: false, code: "persistence_failed", message: read.message };
+    if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };
     const brew = read.value;
     if (!brew) return { ok: false, code: "brew_not_found", message: "The Brew no longer exists." };
     if (brew.executionStatus !== "completed") return { ok: false, code: "invalid_execution_status", message: "Finish the Brew before saving it to Journal.", latest: brew };
-    if (brew.recordStatus === "saved") return { ok: false, code: "already_saved", message: "This Brew is already saved in Journal.", latest: brew };
     const allowed: BrewQuickRating[] = ["liked", "neutral", "disliked", "skipped"];
     if (input.quickRating !== undefined && !allowed.includes(input.quickRating as BrewQuickRating)) return { ok: false, code: "invalid_quick_rating", message: "The selected quick rating is invalid.", latest: brew };
     const rating = input.quickRating as BrewQuickRating | undefined; const now = this.now();
-    const updated: Brew = { ...brew, recordStatus: "saved", ...(rating && { quickRating: rating }), feedbackStatus: rating === "skipped" ? "skipped" : "awaiting_feedback", updatedAt: now };
+    if (rating && rating !== "skipped") return this.setOverallImpression(brewId, rating);
+    if (brew.recordStatus === "saved" && rating === undefined) return { ok: true, value: brew };
+    const updated: Brew = { ...brew, recordStatus: "saved", feedbackStatus: rating === "skipped" && !brew.flavorFeedback ? "skipped" : brew.feedbackStatus, updatedAt: now };
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
@@ -144,6 +153,20 @@ export class BrewService {
     if (!read.ok && !read.value) return { ok: false, code: "persistence_failed", message: read.message };
     if (!read.value) return { ok: false, code: "brew_not_found", message: "The Brew no longer exists." };
     return { ok: true, value: read.value.flavorFeedback, brew: read.value };
+  }
+
+  setOverallImpression(brewId: string, impression: string): BrewOperationResult {
+    const read = this.repository.getById(brewId);
+    if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };
+    const brew = read.value;
+    if (!brew) return { ok: false, code: "brew_not_found", message: "找不到這筆 Brew。" };
+    if (brew.executionStatus !== "completed") return { ok: false, code: "invalid_execution_status", message: "沖完後才能記錄感受。", latest: brew };
+    if (impression !== "liked" && impression !== "neutral" && impression !== "disliked") return { ok: false, code: "invalid_feedback", message: "請選擇有效的感受。", latest: brew };
+    const now = this.now();
+    const feedback: FlavorFeedback = { ...(brew.flavorFeedback ?? { id: this.dependencies.createId?.() ?? createUniqueId(), brewId, flavorNotes: [], createdAt: now }), overallImpression: impression, updatedAt: now };
+    const updated: Brew = { ...brew, flavorFeedback: feedback, updatedAt: now };
+    const written = this.repository.updateDraft(updated);
+    return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
   upsertFlavorFeedback(brewId: string, input: FlavorFeedbackInput): BrewOperationResult {
@@ -169,7 +192,7 @@ export class BrewService {
     if (brew.executionStatus !== "completed") return { ok: false, code: "invalid_execution_status", message: "Complete the Brew before skipping flavor feedback.", latest: brew };
     if (brew.feedbackStatus === "skipped" && !brew.flavorFeedback) return { ok: false, code: "already_skipped", message: "Flavor feedback is already marked for later.", latest: brew };
     const now = this.now();
-    const updated: Brew = { ...brew, flavorFeedback: null, feedbackStatus: "skipped", updatedAt: now };
+    const updated: Brew = { ...brew, feedbackStatus: "skipped", updatedAt: now };
     const written = this.repository.updateDraft(updated);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }

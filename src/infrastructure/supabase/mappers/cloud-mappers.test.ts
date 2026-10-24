@@ -4,18 +4,29 @@ import type { UserProfile } from "@/domain";
 import { CloudMappingError } from "../cloud-row-schemas";
 import { fromProfileRow, toProfileInsert } from "./profile-mapper";
 import { fromBrewRow, toBrewInsert, toBrewUpdate } from "./brew-mapper";
+import { normalizeBrewRecord } from "@/domain/brew-record-normalization";
 import { fromSuggestedPlanRow, toSuggestedPlanInsert, toSuggestedPlanUpdate } from "./suggested-plan-mapper";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const profile: UserProfile = { id: userId, displayName: "Cloud Brewer", experienceLevel: "intermediate", currentNeeds: ["track_and_compare"], createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-02T00:00:00.000Z" };
 const fixtures = createFullDemoFixtures();
-const brew = fixtures.brews.find((item) => item.id === "demo-brew-b-complete")!;
+const brew = normalizeBrewRecord(fixtures.brews.find((item) => item.id === "demo-brew-b-complete")!);
 const plan = fixtures.plans.find((item) => item.id === "demo-plan-accepted")!;
 const profileRow = () => toProfileInsert(profile, { revision: 3 });
 const brewRow = () => toBrewInsert(userId, brew, 4);
 const planRow = () => toSuggestedPlanInsert(userId, plan, 5);
 
 describe("Cloud row mappers", () => {
+  it("converts legacy completed drafts and quick ratings at the cloud boundary", () => {
+    const legacy = { ...brewRow(), record_status: "draft", quick_rating: "liked", flavor_feedback: null };
+    const result = fromBrewRow(legacy).entity;
+    expect(result).toMatchObject({ recordStatus: "saved", flavorFeedback: { overallImpression: "liked" } });
+    expect(result.quickRating).toBeUndefined();
+    const rewritten = toBrewInsert(userId, result);
+    expect(rewritten.quick_rating).toBeNull();
+    expect(rewritten.flavor_feedback).toMatchObject({ overallImpression: "liked" });
+    expect(fromBrewRow(rewritten).entity).toEqual(result);
+  });
   it("normalizes a legacy fractional total before writing the integer SQL column", () => {
     const legacy = { ...brew, actualTotalTimeSeconds: 9.99 };
     expect(toBrewInsert(userId, legacy).actual_total_time_seconds).toBe(9);

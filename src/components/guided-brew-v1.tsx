@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Brew, RecipeStep } from "@/domain";
@@ -73,6 +72,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const voiceStartRef = useRef<WebVoiceStartAdapter | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [interruptionFailed, setInterruptionFailed] = useState(false);
+  const [completionSaveFailed, setCompletionSaveFailed] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceStartSupported] = useState(isWebVoiceStartSupported);
@@ -188,7 +188,8 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       const result = executionPersistence.persist(brew.id, execution, anchor);
       executionSaveErrorRef.current = result.ok ? null : `${copy.timingSaveFailed} ${result.message}`;
       if (!result.ok) setNotice(`${copy.timingSaveFailed} ${result.message}`);
-      else if (execution.phase === "COMPLETED") setNotice(copy.completedLocally);
+      else if (execution.phase === "COMPLETED") router.replace(`/journal/${brew.id}?justCompleted=1`);
+      if (execution.phase === "COMPLETED") setCompletionSaveFailed(!result.ok);
     });
     const startTimer = window.setTimeout(() => {
       if (session.getSnapshot().mode === "camera") void startCamera();
@@ -211,7 +212,15 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       window.clearTimeout(startTimer);
       resources.dispose();
     };
-  }, [brew.id, camera, executionPersistence, session, startCamera, startGuidedBrew, stopCamera]);
+  }, [brew.id, camera, executionPersistence, router, session, startCamera, startGuidedBrew, stopCamera]);
+
+  function retryCompletion() {
+    const anchor = executionAnchorRef.current;
+    if (!anchor) return;
+    const result = executionPersistence.persist(brew.id, session.getSnapshot(), anchor);
+    if (result.ok) router.replace(`/journal/${brew.id}?justCompleted=1`);
+    else setNotice(`${copy.timingSaveFailed} ${result.message}`);
+  }
 
   useEffect(() => {
     if (snapshot.phase !== "BREWING") return;
@@ -281,7 +290,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     if (!result.ok) { setNotice(result.message); startLock.current = false; return; }
     executionAnchorRef.current = null;
     session.dispose(); stopCamera();
-    router.replace(finish ? `/journal/${brew.id}` : `/brew/${brew.id}/prepare`);
+      router.replace(finish ? `/journal/${brew.id}?justCompleted=1` : `/brew/${brew.id}/prepare`);
   }
 
   function enableVoiceStart() {
@@ -376,10 +385,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
             ? <button className="secondary-button" type="button" onClick={() => session.resume(executionNow())}>Resume</button>
             : <button className="secondary-button" type="button" onClick={() => session.pause(executionNow())}>Pause</button>}
         </> : null}
-        {snapshot.phase === "COMPLETED" ? <>
-          <Link className="primary-button" href={`/brew/${brew.id}/complete`}>Continue to Brew Complete</Link>
-          <Link className="secondary-button" href={`/recipes/${brew.sourceRecipeId}/prepare`}>Prepare another Brew</Link>
-        </> : null}
+        {snapshot.phase === "COMPLETED" && completionSaveFailed ? <button className="primary-button" type="button" onClick={retryCompletion}>{copy.retryCompletion}</button> : null}
       </section>
     </main>
   );

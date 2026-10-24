@@ -1,5 +1,16 @@
 # Routes
 
+## REQ-36 update
+
+- Normal final-stage completion automatically saves and replaces Live Brew with
+  `/journal/[brewId]?justCompleted=1`; the existing Detail hosts the completion
+  result table and optional quick feeling.
+- `/brew/[brewId]/complete` is a compatibility redirect to Brew Detail, without
+  a separate Summary component or Save Brew action.
+- Journal no longer has a completed-draft section. To Brew UI remains journey 04;
+  Next Try links remain until REQ-37. Earlier route descriptions below are historical
+  where they mention manual Summary saving.
+
 REQ-35 applies the V1 interruption policy on `/brew/[brewId]`: browser/system
 Back records departure; foreground and reload reconcile wall time within 30
 minutes. Expiry clears execution and replaces the page with the same Brew's

@@ -21,6 +21,10 @@ export class GuidedBrewPersistenceService {
     if (!brew) return { ok: false, code: "brew_not_found", message: invalidTiming };
     const invalid = (): BrewOperationResult => ({ ok: false, code: "invalid_execution_status", message: invalidTiming, latest: brew });
     const runtime = snapshot.runtime;
+    if (brew.recordStatus === "saved" && brew.executionStatus === "completed" && runtime.state === "completed"
+      && (brew.executionRun ?? 1) === runtime.runNumber && runtime.startedAtMs === anchor.runtimeTimeMs
+      && Date.parse(brew.startedAt ?? "") === anchor.wallTimeMs && runtime.completedAtMs !== undefined
+      && brew.completedAt === new Date(anchor.wallTimeMs + runtime.completedAtMs - anchor.runtimeTimeMs).toISOString()) return { ok: true, value: brew };
     if (brew.recordStatus !== "draft" || !["in_progress", "paused"].includes(brew.executionStatus)
       || (brew.executionRun ?? 1) !== runtime.runNumber
       || runtime.startedAtMs === undefined
@@ -54,6 +58,8 @@ export class GuidedBrewPersistenceService {
       ...brew,
       executionRun: runtime.runNumber,
       executionStatus: completed ? "completed" : runtime.state === "paused" ? "paused" : "in_progress",
+      recordStatus: completed ? "saved" : brew.recordStatus,
+      feedbackStatus: completed ? "awaiting_feedback" : brew.feedbackStatus,
       currentStageOrder: completed ? steps.length : runtime.currentStageIndex ?? 0,
       currentStageStartedAt: completed || activeStage?.startedAtMs === undefined ? null : iso(activeStage.startedAtMs),
       currentStagePausedSeconds: completed ? 0 : (activeStage?.pausedDurationMs ?? 0) / 1_000,

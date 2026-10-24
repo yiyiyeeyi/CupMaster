@@ -1,4 +1,5 @@
 export const guidedBrewCopy = {
+  retryCompletion: "重試保存沖煮結果",
   overrun: "已超過預定時間",
   finishAndSave: "完成並保存",
   discard: "作廢",
