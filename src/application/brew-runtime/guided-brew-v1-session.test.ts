@@ -64,6 +64,47 @@ function makeReady(session: GuidedBrewV1Session) {
 }
 
 describe("GuidedBrewV1Session", () => {
+  it("can complete by timer and voice without camera positioning or frames", () => {
+    const { session, voice, completedStages, onCompleted } = setup();
+    expect(session.start("TOUCH", 100)).toBe(false);
+    expect(session.selectMode("timer_voice")).toMatchObject({ phase: "READY", mode: "timer_voice" });
+    expect(session.start("VOICE", 400)).toBe(true);
+    expect(session.start("TOUCH", 401)).toBe(false);
+    session.tick(900);
+    session.tick(1_400);
+    session.tick(2_400);
+    expect(session.getSnapshot()).toMatchObject({ phase: "COMPLETED", mode: "timer_voice", elapsedMs: 2_000 });
+    expect(completedStages).toEqual([0, 1]);
+    expect(onCompleted).toHaveBeenCalledOnce();
+    expect(voice.events).toHaveLength(5);
+  });
+
+  it("requires a fresh placement when returning to camera before starting", () => {
+    const { session } = setup();
+    makeReady(session);
+    session.selectMode("timer_voice");
+    expect(session.selectMode("camera").phase).toBe("POSITIONING");
+    expect(session.start("TOUCH", 400)).toBe(false);
+    makeReady(session);
+    expect(session.start("TOUCH", 400)).toBe(true);
+  });
+
+  it("does not reset an active timer, stages or speech when re-enabling the camera", () => {
+    const { session, voice } = setup();
+    session.selectMode("timer_voice");
+    session.start("TOUCH", 400);
+    session.tick(1_400);
+    const before = session.getSnapshot();
+    const after = session.selectMode("camera");
+    expect(after).toMatchObject({ phase: "BREWING", mode: "camera", elapsedMs: before.elapsedMs });
+    expect(after.runtime).toEqual(before.runtime);
+    const spoken = voice.events.length;
+    session.selectMode("camera");
+    expect(voice.events).toHaveLength(spoken);
+    session.tick(2_400);
+    expect(session.getSnapshot().phase).toBe("COMPLETED");
+  });
+
   it("restores guidance after effect cleanup and setup without duplicate subscriptions", () => {
     const { session, voice } = setup();
     const firstListener = vi.fn();

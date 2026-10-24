@@ -1,5 +1,17 @@
 # Vertical Slices
 
+## Current implementation note — REQ-3 optional camera
+
+Vertical Slice 1's existing Guided Brew now supports timer/voice mode without
+camera permission, positioning samples, or a video preview. Camera failures
+select that mode automatically; users may also choose it in the existing
+setup action area even when a camera is available. Retry stays in the same
+camera card. Timer/voice uses the same immutable recipe, stage engine,
+guidance, persistence callbacks, Brew Complete and Save Brew flow. Changing
+preview mode during brewing never resets the runtime. This supersedes older
+camera-exclusion descriptions below; it adds no layout sections or vision
+inference and does not claim to fix REQ-4 or REQ-27/5.
+
 Cloud 3-2 is infrastructure adjacent to every slice. It centralizes repository construction and defines migration readiness, but runtime remains Local and no slice uploads, syncs, or changes behavior. Cloud 4—not this increment—will begin explicit Local-to-cloud migration; Cloud 5 is reserved for sync.
 
 Cloud 4-2 is account infrastructure outside the product slices. It copies one explicitly reviewed snapshot. Discover, Brew, Journal, Analysis, Plans, and Demo continue using Local repositories afterward.

@@ -14,6 +14,7 @@ import { CameraCaptureService, FrameAnalysisService, FrameSampler, type CameraCa
 import { isWebVoiceStartSupported, WebGuidanceVoiceAdapter, WebVoiceStartAdapter } from "@/infrastructure/voice";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
+import { guidedBrewCopy as copy } from "./guided-brew-copy";
 
 const DRIPPER_REGION: Readonly<NormalizedRect> = { x: 0.2, y: 0.22, width: 0.6, height: 0.5 };
 
@@ -37,13 +38,13 @@ function withFallbackGuidance(steps: readonly RecipeStep[]): RecipeStep[] {
 
 function cameraMessage(camera: CameraCaptureSnapshot) {
   switch (camera.state) {
-    case "idle": return "Camera is off.";
-    case "requesting": return "Requesting rear camera access…";
-    case "ready": return "Rear camera preview is active throughout the brew.";
-    case "permission_denied": return "Camera permission was denied. Allow camera access in browser settings, then retry.";
-    case "unsupported": return "This browser does not expose camera capture. Use a current mobile browser over HTTPS.";
-    case "unavailable": return "The rear camera is unavailable or already in use.";
-    case "error": return "The camera could not start. Retry or close other camera applications.";
+    case "idle": return copy.cameraIdle;
+    case "requesting": return copy.cameraRequesting;
+    case "ready": return copy.cameraReady;
+    case "permission_denied": return copy.cameraDenied;
+    case "unsupported": return copy.cameraUnsupported;
+    case "unavailable": return copy.cameraUnavailable;
+    case "error": return copy.cameraError;
   }
 }
 
@@ -51,6 +52,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const samplerRef = useRef<FrameSampler | null>(null);
   const samplerUnsubscribeRef = useRef<(() => void) | null>(null);
+  const cameraRequestRef = useRef(0);
   const startLock = useRef(false);
   const voiceStartRef = useRef<WebVoiceStartAdapter | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -84,7 +86,9 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const [cameraSnapshot, setCameraSnapshot] = useState(() => camera.getSnapshot());
 
   const startGuidedBrew = useCallback((source: GuidedBrewStartSource) => {
-    if (startLock.current || session.getSnapshot().phase !== "READY") return;
+    const current = session.getSnapshot();
+    if (startLock.current || current.phase !== "READY"
+      || (current.mode === "camera" && camera.getSnapshot().state !== "ready")) return;
     startLock.current = true;
     const brews = new LocalBrewRepository();
     const result = new BrewSessionCoordinator(
@@ -99,20 +103,43 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     const started = session.start(source, monotonicNow());
     setVoiceListening(false);
     setNotice(started
-      ? `Brew started by ${source === "VOICE" ? "voice" : "touch"}. Camera remains active.`
-      : "The brew was already started; the duplicate signal was ignored.");
+      ? current.mode === "timer_voice" ? copy.startTimerVoice : copy.startCamera
+      : copy.duplicateStart);
     startLock.current = false;
-  }, [brew.id, session]);
-  const startCamera = useCallback(async () => {
-    if (videoRef.current === null) return;
+  }, [brew.id, camera, session]);
+  const stopCamera = useCallback(() => {
+    cameraRequestRef.current += 1;
     samplerUnsubscribeRef.current?.();
+    samplerUnsubscribeRef.current = null;
     samplerRef.current?.stop();
     samplerRef.current = null;
+    camera.stop();
+    if (videoRef.current !== null) videoRef.current.srcObject = null;
     analyzer.reset();
+  }, [analyzer, camera]);
+
+  function chooseTimerVoice() {
+    stopCamera();
+    session.selectMode("timer_voice");
+    setNotice(copy.timerVoiceDescription);
+  }
+
+  const startCamera = useCallback(async () => {
+    if (videoRef.current === null) return;
+    stopCamera();
+    const request = cameraRequestRef.current;
     const result = await camera.start({ preferredFacingMode: "environment", idealWidth: 1280, idealHeight: 720, idealFrameRate: 30 });
-    if (result.state !== "ready" || videoRef.current === null) return;
+    if (request !== cameraRequestRef.current || videoRef.current === null) return;
+    if (result.state !== "ready") {
+      session.selectMode("timer_voice");
+      setNotice(cameraMessage(result));
+      return;
+    }
     try {
       await camera.attachToVideo(videoRef.current);
+      if (request !== cameraRequestRef.current || videoRef.current === null) return;
+      session.selectMode("camera");
+      setNotice(null);
       const sampler = new FrameSampler(videoRef.current, { targetFps: 10 });
       samplerUnsubscribeRef.current = sampler.subscribe((sample) => {
         const analysis = analyzer.analyze(sample);
@@ -125,23 +152,24 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       samplerRef.current = sampler;
       sampler.start();
     } catch {
-      setNotice("Camera permission succeeded, but the preview could not play. Tap Retry Camera.");
+      if (request !== cameraRequestRef.current) return;
+      stopCamera();
+      session.selectMode("timer_voice");
+      setNotice(copy.previewFailed);
     }
-  }, [analyzer, camera, session]);
+  }, [analyzer, camera, session, stopCamera]);
 
   useEffect(() => {
-    const video = videoRef.current;
     session.activate();
     const voiceStart = new WebVoiceStartAdapter(() => startGuidedBrew("VOICE"));
     voiceStartRef.current = voiceStart;
     const unsubscribeSession = session.subscribe(setSnapshot);
     const unsubscribeCamera = camera.subscribe(setCameraSnapshot);
-    const startTimer = window.setTimeout(() => void startCamera(), 0);
+    const startTimer = window.setTimeout(() => {
+      if (session.getSnapshot().mode === "camera") void startCamera();
+    }, 0);
     const resources = new GuidedBrewResourceScope();
-    resources.add(() => {
-      camera.stop();
-      if (video !== null) video.srcObject = null;
-    });
+    resources.add(stopCamera);
     resources.add(() => session.dispose());
     resources.add(() => {
       voiceStart.dispose();
@@ -157,7 +185,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       window.clearTimeout(startTimer);
       resources.dispose();
     };
-  }, [camera, session, startCamera, startGuidedBrew]);
+  }, [camera, session, startCamera, startGuidedBrew, stopCamera]);
 
   useEffect(() => {
     if (snapshot.phase !== "BREWING") return;
@@ -176,7 +204,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     setVoiceListening(false);
     analyzer.reset();
     session.restart(monotonicNow());
-    setNotice("Guided runtime restarted. Reconfirm the dripper position; the camera stayed active.");
+    setNotice(session.getSnapshot().mode === "timer_voice" ? copy.restartTimerVoice : copy.restartCamera);
   }
 
   const runtime = snapshot.runtime;
@@ -193,6 +221,8 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
         : snapshot.phase === "BREWING" ? "Guided brew running"
           : "Recipe complete";
   const canRestart = snapshot.phase === "BREWING" && completedStages === 0;
+  const withoutCamera = snapshot.mode === "timer_voice";
+  const isSetup = snapshot.phase !== "BREWING" && snapshot.phase !== "COMPLETED";
 
   return (
     <main className="guided-brew-page">
@@ -203,18 +233,18 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       </div>
 
       <section className="guided-camera-card" aria-labelledby="guided-camera-heading">
-        <div className="section-heading"><div><p className="eyebrow">Live rear camera</p><h2 id="guided-camera-heading">Position the dripper</h2></div><strong>{cameraSnapshot.state}</strong></div>
+        <div className="section-heading"><div><p className="eyebrow">{withoutCamera ? copy.timerVoiceLabel : copy.cameraLabel}</p><h2 id="guided-camera-heading">{withoutCamera ? copy.timerVoiceHeading : copy.cameraHeading}</h2></div><strong>{cameraSnapshot.state}</strong></div>
         <div className="guided-camera-preview">
           <video ref={videoRef} aria-label="Live rear camera preview" />
-          <div className={`guided-dripper-region guided-dripper-region-${snapshot.phase.toLowerCase()}`} aria-hidden="true" />
-          <span className="guided-camera-state">{snapshot.phase}</span>
+          {!withoutCamera ? <div className={`guided-dripper-region guided-dripper-region-${snapshot.phase.toLowerCase()}`} aria-hidden="true" /> : null}
+          <span className="guided-camera-state">{withoutCamera ? copy.timerVoiceLabel : snapshot.phase}</span>
         </div>
-        <p className="guided-position-copy" role="status"><strong>{statusCopy}</strong><span>{cameraMessage(cameraSnapshot)}</span></p>
-        {cameraSnapshot.state === "ready" && snapshot.phase !== "BREWING" && snapshot.phase !== "COMPLETED" && !snapshot.positioning.placementConfirmed
+        <p className="guided-position-copy" role="status"><strong>{withoutCamera ? copy.timerVoiceDescription : statusCopy}</strong><span>{cameraMessage(cameraSnapshot)}</span></p>
+        {!withoutCamera && cameraSnapshot.state === "ready" && isSetup && !snapshot.positioning.placementConfirmed
           ? <button className="secondary-button guided-full-button" type="button" onClick={() => session.confirmDripperPlacement()}>Dripper is inside the guide</button>
           : null}
         {cameraSnapshot.state !== "ready" && cameraSnapshot.state !== "requesting"
-          ? <button className="secondary-button guided-full-button" type="button" onClick={() => void startCamera()}>Retry Camera</button>
+          ? <button className="secondary-button guided-full-button" type="button" onClick={() => void startCamera()}>{copy.retryCamera}</button>
           : null}
       </section>
 
@@ -245,6 +275,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       {notice !== null ? <p className="notice" role="status">{notice}</p> : null}
 
       <section className="guided-actions">
+        {isSetup && !withoutCamera ? <button className="secondary-button" type="button" onClick={chooseTimerVoice}>{copy.chooseTimerVoice}</button> : null}
         {snapshot.phase === "READY" ? <>
           <button className="primary-button" type="button" onClick={() => { voiceStartRef.current?.stop(); setVoiceListening(false); startGuidedBrew("TOUCH"); }}>Start Brew</button>
           <button className="secondary-button" type="button" disabled={!voiceStartSupported || voiceListening} onClick={enableVoiceStart}>{voiceListening ? "Listening for 開始…" : "Enable voice start"}</button>

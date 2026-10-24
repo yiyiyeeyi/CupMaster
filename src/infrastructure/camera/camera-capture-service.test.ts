@@ -119,6 +119,53 @@ describe("CameraCaptureService capability and start", () => {
 });
 
 describe("CameraCaptureService stream lifecycle", () => {
+  it("stops a late permission result after switching away from camera", async () => {
+    let grant!: (stream: MediaStream) => void;
+    installMediaDevices(() => new Promise<MediaStream>((resolve) => { grant = resolve; }));
+    const service = new CameraCaptureService();
+    const pending = service.start();
+    service.stop();
+    const track = fakeTrack();
+    grant(fakeStream([track]));
+    await expect(pending).resolves.toEqual({ state: "idle", hasStream: false });
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(service.getStream()).toBeNull();
+  });
+
+  it("does not replace a newer stream with an older permission result", async () => {
+    let grantFirst!: (stream: MediaStream) => void;
+    const currentStream = fakeStream();
+    let calls = 0;
+    installMediaDevices(() => ++calls === 1
+      ? new Promise<MediaStream>((resolve) => { grantFirst = resolve; })
+      : Promise.resolve(currentStream));
+    const service = new CameraCaptureService();
+    const older = service.start();
+    await service.start();
+    const oldTrack = fakeTrack();
+    grantFirst(fakeStream([oldTrack]));
+    await older;
+    expect(oldTrack.stop).toHaveBeenCalledOnce();
+    expect(service.getStream()).toBe(currentStream);
+    expect(service.getSnapshot().state).toBe("ready");
+  });
+
+  it("ignores a late rejection after a newer camera request succeeds", async () => {
+    let rejectFirst!: (error: Error) => void;
+    let calls = 0;
+    const currentStream = fakeStream();
+    installMediaDevices(() => ++calls === 1
+      ? new Promise<MediaStream>((_, reject) => { rejectFirst = reject; })
+      : Promise.resolve(currentStream));
+    const service = new CameraCaptureService();
+    const older = service.start();
+    await service.start();
+    rejectFirst(namedError("NotAllowedError"));
+    await older;
+    expect(service.getStream()).toBe(currentStream);
+    expect(service.getSnapshot().state).toBe("ready");
+  });
+
   it("stops every track and returns to idle", async () => {
     const tracks = [fakeTrack(), fakeTrack()];
     installMediaDevices(async () => fakeStream(tracks));

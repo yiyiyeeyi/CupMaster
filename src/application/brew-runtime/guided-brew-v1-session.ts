@@ -7,9 +7,11 @@ import {
 import type { GuidanceVoicePort } from "@/infrastructure/voice";
 
 export type GuidedBrewStartSource = "TOUCH" | "VOICE" | "SCALE_CAMERA";
+export type GuidedBrewMode = "camera" | "timer_voice";
 export type GuidedBrewPhase = DripperPositioningSnapshot["state"] | "BREWING" | "COMPLETED";
 
 export interface GuidedBrewV1Snapshot {
+  mode: GuidedBrewMode;
   phase: GuidedBrewPhase;
   startSource: GuidedBrewStartSource | null;
   runtime: BrewSessionRuntime;
@@ -40,6 +42,7 @@ export class GuidedBrewV1Session {
   private readonly notifiedStageIndexes = new Set<number>();
   private unsubscribeGuidance: (() => void) | undefined;
   private started = false;
+  private mode: GuidedBrewMode = "camera";
   private completionNotified = false;
   private startSource: GuidedBrewStartSource | null = null;
   private currentGuidance: BrewGuidanceEvent | null = null;
@@ -68,6 +71,12 @@ export class GuidedBrewV1Session {
     return this.publish();
   }
 
+  selectMode(mode: GuidedBrewMode): GuidedBrewV1Snapshot {
+    if (mode !== this.mode && !this.started) this.positioning.reset();
+    this.mode = mode;
+    return this.publish();
+  }
+
   observePositioning(timestampMs: number, motionScore: number): GuidedBrewV1Snapshot {
     this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
     if (!this.started) this.positioning.observe(timestampMs, motionScore);
@@ -75,7 +84,7 @@ export class GuidedBrewV1Session {
   }
 
   start(source: GuidedBrewStartSource, timestampMs: number): boolean {
-    if (this.started || this.positioning.getSnapshot().state !== "READY") return false;
+    if (this.started || (this.mode === "camera" && this.positioning.getSnapshot().state !== "READY")) return false;
     this.started = true;
     this.startSource = source;
     this.lastTimestampMs = timestampMs;
@@ -160,7 +169,9 @@ export class GuidedBrewV1Session {
       ? 0
       : Math.max(0, this.lastTimestampMs - currentStage.startedAtMs - currentStage.pausedDurationMs - ongoingPauseMs);
     return {
-      phase: runtime.state === "completed" ? "COMPLETED" : this.started ? "BREWING" : positioning.state,
+      mode: this.mode,
+      phase: runtime.state === "completed" ? "COMPLETED" : this.started ? "BREWING"
+        : this.mode === "timer_voice" ? "READY" : positioning.state,
       startSource: this.startSource,
       runtime,
       positioning,

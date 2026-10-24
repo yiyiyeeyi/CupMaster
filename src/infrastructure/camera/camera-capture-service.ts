@@ -40,12 +40,14 @@ function safeError(error: unknown): { state: CameraCaptureState; errorCode: Came
 }
 
 export class CameraCaptureService {
+  private requestGeneration = 0;
   private stream: MediaStream | null = null;
   private snapshot: CameraCaptureSnapshot = { ...INITIAL_SNAPSHOT };
   private readonly listeners = new Set<CameraCaptureListener>();
 
   async start(options: StartCameraOptions = {}) {
     this.stop();
+    const generation = this.requestGeneration;
     this.update({ state: "requesting", hasStream: false });
 
     if (typeof navigator === "undefined"
@@ -65,6 +67,10 @@ export class CameraCaptureService {
           frameRate: { ideal: resolved.idealFrameRate },
         },
       });
+      if (generation !== this.requestGeneration) {
+        for (const track of stream.getTracks()) track.stop();
+        return this.getSnapshot();
+      }
       this.stream = stream;
       const settings = stream.getVideoTracks()[0]?.getSettings();
       return this.update({
@@ -75,6 +81,7 @@ export class CameraCaptureService {
         ...(settings?.deviceId && { deviceId: settings.deviceId }),
       });
     } catch (error) {
+      if (generation !== this.requestGeneration) return this.getSnapshot();
       this.stream = null;
       return this.update({ ...safeError(error), hasStream: false });
     }
@@ -93,6 +100,7 @@ export class CameraCaptureService {
   }
 
   stop() {
+    this.requestGeneration += 1;
     if (this.stream) {
       for (const track of this.stream.getTracks()) track.stop();
       this.stream = null;
