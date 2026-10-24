@@ -38,7 +38,7 @@ export class GuidedBrewV1Session {
   private readonly onCompleted: (() => void) | undefined;
   private readonly listeners = new Set<GuidedBrewListener>();
   private readonly notifiedStageIndexes = new Set<number>();
-  private readonly unsubscribeGuidance: () => void;
+  private unsubscribeGuidance: (() => void) | undefined;
   private started = false;
   private completionNotified = false;
   private startSource: GuidedBrewStartSource | null = null;
@@ -51,6 +51,11 @@ export class GuidedBrewV1Session {
     this.voice = options.voice;
     this.onStageCompleted = options.onStageCompleted;
     this.onCompleted = options.onCompleted;
+    this.activate();
+  }
+
+  activate(): void {
+    if (this.unsubscribeGuidance !== undefined) return;
     this.unsubscribeGuidance = this.runtime.subscribeGuidance((event) => {
       this.currentGuidance = { ...event };
       this.voice.speak(event);
@@ -173,7 +178,8 @@ export class GuidedBrewV1Session {
   }
 
   dispose(): void {
-    this.unsubscribeGuidance();
+    this.unsubscribeGuidance?.();
+    this.unsubscribeGuidance = undefined;
     this.voice.dispose();
     this.listeners.clear();
   }

@@ -131,6 +131,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
 
   useEffect(() => {
     const video = videoRef.current;
+    session.activate();
     const voiceStart = new WebVoiceStartAdapter(() => startGuidedBrew("VOICE"));
     voiceStartRef.current = voiceStart;
     const unsubscribeSession = session.subscribe(setSnapshot);
