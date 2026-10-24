@@ -1,5 +1,22 @@
 # Vertical Slices
 
+## Current implementation note — REQ-35 interruption and Wake Lock
+
+V1 Guide counts wall time while away, excluding only explicit pauses. Within
+30 minutes, timed progress catches up; past the recipe's expected total, the
+user chooses actual-time Finish and Save or Discard. More than 30 minutes away
+clears execution and preserves preparation parameters. Browser/system Back and
+bfcache use the same policy. Foreground uses wall time even when performance.now
+does not advance. Full reload continues through the existing manual view;
+the mounted guided runtime remains guided after visibility changes.
+
+Screen Wake Lock is best effort and silent on success. Preparation shows the
+specified fallback hint and bottom sheet on failure, with a repository-backed
+local opt-out. Start is never gated on Wake Lock. Active/reset execution is
+hidden from Journal and no Continue Current Brew prompt is shown. The Journal
+To Brew view, ordinary auto-save and Next Try replacement remain later slices.
+No cloud schema or retry queue is added; REQ-4's push/deployment gate remains.
+
 ## Current implementation note — REQ-4 execution consistency
 
 Guided Brew's visible and persisted times come from the same runtime observations,

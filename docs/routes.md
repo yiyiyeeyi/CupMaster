@@ -1,5 +1,15 @@
 # Routes
 
+REQ-35 applies the V1 interruption policy on `/brew/[brewId]`: browser/system
+Back records departure; foreground and reload reconcile wall time within 30
+minutes. Expiry clears execution and replaces the page with the same Brew's
+`/prepare` route (native replacement also supports bfcache restoration).
+Overrun offers actual-time Finish and Save to `/journal/[brewId]`, or Discard to
+preparation. No new route is added. The Brew hub no longer suggests continuing
+a draft, and Journal excludes setup/active/paused/discarded execution. Wake Lock
+help is an inline preparation hint and bottom sheet. See
+`docs/project/req-35-interruption.md`; this supersedes REQ-4's reload timing note.
+
 REQ-4 synchronizes Guided Brew pause/resume, stage/completion timing and
 same-Brew execution clearing with local storage. Restart setup is removed;
 App Back confirms 是／否 during execution. Yes clears execution and routes to

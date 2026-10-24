@@ -50,6 +50,7 @@ export class GuidedBrewV1Session {
   private startSource: GuidedBrewStartSource | null = null;
   private currentGuidance: BrewGuidanceEvent | null = null;
   private lastTimestampMs = 0;
+  private catchingUp = false;
 
   constructor(options: GuidedBrewV1SessionOptions) {
     this.runtime = options.runtime;
@@ -65,8 +66,10 @@ export class GuidedBrewV1Session {
     if (this.unsubscribeGuidance !== undefined) return;
     this.unsubscribeGuidance = this.runtime.subscribeGuidance((event) => {
       this.currentGuidance = { ...event };
-      this.voice.speak(event);
-      this.publish();
+      if (!this.catchingUp) {
+        this.voice.speak(event);
+        this.publish();
+      }
     });
   }
 
@@ -129,6 +132,36 @@ export class GuidedBrewV1Session {
     if (this.started) this.runtime.pause(timestampMs);
     this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
     if (this.runtime.getSnapshot().state !== previous) this.publishExecution();
+    return this.publish();
+  }
+
+  observeTime(timestampMs: number): GuidedBrewV1Snapshot {
+    this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
+    return this.publish();
+  }
+
+  /** Advance elapsed timed guidance on foreground return without replaying past speech. */
+  catchUp(timestampMs: number): GuidedBrewV1Snapshot {
+    if (!this.started) return this.getSnapshot();
+    const previousGuidance = this.currentGuidance;
+    this.lastTimestampMs = Math.max(this.lastTimestampMs, timestampMs);
+    this.catchingUp = true;
+    try {
+      for (;;) {
+        const runtime = this.runtime.getSnapshot();
+        if (runtime.state !== "pouring" || runtime.currentStageIndex === null) break;
+        const stage = runtime.stages[runtime.currentStageIndex];
+        const target = runtime.recipe.stages[runtime.currentStageIndex]?.targetPourDurationMs;
+        if (stage.startedAtMs === undefined || target === undefined || target <= 0) break;
+        const due = stage.startedAtMs + stage.pausedDurationMs + target;
+        if (due > timestampMs) break;
+        this.runtime.manualPourStop(due);
+        if (this.runtime.getSnapshot().state === "paused_between_pours") this.runtime.manualPourStart(due);
+      }
+      this.runtime.tick(timestampMs);
+    } finally { this.catchingUp = false; }
+    this.notifyTransitions(this.runtime.getSnapshot());
+    if (this.currentGuidance && this.currentGuidance !== previousGuidance && this.runtime.getSnapshot().state === "pouring") this.voice.speak(this.currentGuidance);
     return this.publish();
   }
 

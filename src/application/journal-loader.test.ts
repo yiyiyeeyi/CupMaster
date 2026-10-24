@@ -6,7 +6,7 @@ import { JournalLoader } from "./journal-loader";
 import type { BrewRepository } from "@/repositories/brew-repository";
 import type { SuggestedPlanRepository } from "@/repositories/suggested-plan-repository";
 
-const source = createBrewDraft(recipeFixtures[0], createQuickPrepareDefaults(recipeFixtures[0]), { createId: () => "source" });
+const source: Brew = { ...createBrewDraft(recipeFixtures[0], createQuickPrepareDefaults(recipeFixtures[0]), { createId: () => "source" }), executionStatus: "completed", recordStatus: "saved" };
 const plan: SuggestedBrewPlan = { id: "plan", sourceBrewId: source.id, sourceAnalysisId: "analysis", sourceRecommendationId: "recommendation", sourceFingerprint: "fingerprint", sourceAnalysisGeneratedAt: "2026-01-01T00:00:00.000Z", title: "Next Try", resultingBrewId: null, status: "draft", usedAt: null, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", baseRecipeSnapshot: source.recipeSnapshot, adjustments: [{ id: "adjustment", variable: "grind", scope: "overall", stageId: null, direction: "coarser", previousValue: "fine", suggestedValue: "coarse", unit: null, description: "Slightly coarser" }], rationale: "Test one variable.", confidence: "medium", evidence: [{ field: "bitterness", label: "Bitterness", value: "high" }], keepUnchanged: ["Dose"] };
 function repositories(planFailure = false) {
   const counts = { listAll: 0, planList: 0 };
@@ -19,6 +19,13 @@ function repositories(planFailure = false) {
   return { brews, plans, counts };
 }
 describe("JournalLoader", () => {
+  it("hides setup, active, paused and discarded/reset executions from Journal", () => {
+    const { brews, plans } = repositories();
+    const hidden: Brew[] = ["not_started", "in_progress", "paused", "abandoned"].map((executionStatus, index) => ({ ...source, id: `hidden-${index}`, recordStatus: "draft", executionStatus: executionStatus as Brew["executionStatus"] }));
+    brews.listAll = () => ({ ok: true, value: [source, ...hidden] });
+    const result = new JournalLoader(brews, plans).load();
+    expect(result.ok && result.cards.map(card => card.brew.id)).toEqual([source.id]);
+  });
   it("batch reads Brews and Plans once and builds source mappings", () => { const { brews, plans, counts } = repositories(); const result = new JournalLoader(brews, plans).load(); expect(result).toMatchObject({ ok: true, cards: [{ brew: { id: "source" }, sourceNextTry: { hasSuggestedPlans: true, totalPlans: 1 }, action: { href: "/journal/source" } }] }); expect(counts).toEqual({ listAll: 1, planList: 1 }); });
   it("keeps the Brew list when Plan storage fails", () => { const { brews, plans } = repositories(true); const result = new JournalLoader(brews, plans).load(); expect(result).toMatchObject({ ok: true, cards: [{ brew: { id: "source" }, sourceNextTry: { hasSuggestedPlans: false, hasPartialDataWarning: true } }], notice: "Some Next Try links could not be loaded." }); });
   it("keeps embedded resulting Brew context independent from Plan lookup", () => { const resulting: Brew = { ...source, id: "result", sourceType: "suggested_plan", sourceSuggestedPlanId: "missing", suggestedPlanHandoff: { suggestedPlanId: "missing", adjustmentId: "a", variable: "grind", originalValue: "fine", suggestedValue: "coarse", unit: null, description: "coarser", rationale: "test", confidence: "medium", evidence: [], userDecision: "accepted", confirmedAt: "2026-01-01T00:00:00.000Z" } }; const { plans } = repositories(true); const { brews } = repositories(); brews.listAll = () => ({ ok: true, value: [resulting] }); const loaded = new JournalLoader(brews, plans).load(); expect(loaded).toMatchObject({ ok: true, cards: [{ resultContext: { isSuggestedPlanBrew: true, handoffLabel: "Accepted" } }] }); });

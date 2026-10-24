@@ -1,19 +1,22 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Brew, RecipeStep } from "@/domain";
 import { formatDuration } from "@/domain";
 import { BrewService, type BrewDomainErrorCode } from "@/application/brew-service";
+import { BrewInterruptionService } from "@/application/brew-interruption-service";
 import { SuggestedPlanService } from "@/application/suggested-plan-service";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
+import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
 import { BrewBackButton } from "./brew-back-button";
+import { LiveBrewWakeLock } from "./live-brew-wake-lock";
 import { BrewTimers } from "./brew-timers";
 import { GuidedBrewV1 } from "./guided-brew-v1";
 import { guidedBrewCopy } from "./guided-brew-copy";
 
-type ViewState = { status: "loading" } | { status: "found"; brew: Brew; notice?: string; errorCode?: BrewDomainErrorCode } | { status: "missing"; message?: string };
+type ViewState = { status: "loading" } | { status: "found"; brew: Brew; overrun?: boolean; notice?: string; errorCode?: BrewDomainErrorCode } | { status: "missing"; message?: string } | { status: "error"; message: string };
 const errorCopy: Partial<Record<BrewDomainErrorCode, string>> = {
   brew_not_found: "找不到這筆 Brew。它可能已被刪除或只存在於另一個瀏覽器。",
   invalid_execution_status: "這筆 Brew 目前不是可開始或推進的狀態。資料不會被重置。",
@@ -30,14 +33,49 @@ function expectedStart(steps: RecipeStep[], index: number) { return steps.slice(
 
 export function LiveBrewDraft({ brewId }: { brewId: string }) {
   const [state, setState] = useState<ViewState>({ status: "loading" }); const [syncWarning,setSyncWarning]=useState<string|null>(null);const actionLock = useRef(false); const [acting, setActing] = useState(false); const router = useRouter();
-  useEffect(() => { const timer = window.setTimeout(() => { const result = new LocalBrewRepository().getById(brewId); if (result.value){setState({ status: "found", brew: result.value, ...((result.ok ? result.notice : result.message) && { notice: result.ok ? result.notice : result.message }) });if(result.value.sourceSuggestedPlanId&&result.value.startedAt){const plan=new LocalSuggestedPlanRepository().getById(result.value.sourceSuggestedPlanId).value;if(!plan||plan.status!=="used"||plan.usedAt!==result.value.startedAt||plan.resultingBrewId!==result.value.id)setSyncWarning("Brew started, but the Next Try status could not be synced.")}} else setState({ status: "missing", ...(!result.ok && { message: result.message }) }); }, 0); return () => window.clearTimeout(timer); }, [brewId]);
+  const [interruption] = useState(() => new BrewInterruptionService(new LocalBrewRepository(), new LocalLiveBrewRepository()));
+  const redirecting = useRef(false);
+  const reload = useCallback(() => {
+    if (redirecting.current) return;
+    const result = interruption.inspect(brewId, true);
+    if (!result.ok) { setState({ status: "error", message: result.message }); return; }
+    if (result.state === "expired") {
+      redirecting.current = true;
+      // A hard replace also works while the browser is restoring a bfcache page.
+      window.location.replace(`/brew/${brewId}/prepare`);
+      return;
+    }
+    setState({ status: "found", brew: result.brew, overrun: result.state === "overrun" });
+    if (result.brew.sourceSuggestedPlanId && result.brew.startedAt) {
+      const plan = new LocalSuggestedPlanRepository().getById(result.brew.sourceSuggestedPlanId).value;
+      if (!plan || plan.status !== "used" || plan.usedAt !== result.brew.startedAt || plan.resultingBrewId !== brewId) setSyncWarning("Brew started, but the Next Try status could not be synced.");
+    }
+  }, [brewId, interruption]);
+  useEffect(() => { const timer = window.setTimeout(reload, 0); return () => window.clearTimeout(timer); }, [reload]);
+  const manualActive = state.status === "found" && (state.brew.executionStatus === "in_progress" || state.brew.executionStatus === "paused");
+  useEffect(() => {
+    if (!manualActive) return;
+    const leave = () => { interruption.leave(brewId); };
+    const foreground = () => { if (document.visibilityState === "visible") reload(); else leave(); };
+    document.addEventListener("visibilitychange", foreground);
+    window.addEventListener("pagehide", leave); window.addEventListener("popstate", leave); window.addEventListener("pageshow", foreground);
+    return () => { document.removeEventListener("visibilitychange", foreground); window.removeEventListener("pagehide", leave); window.removeEventListener("popstate", leave); window.removeEventListener("pageshow", foreground); leave(); };
+  }, [brewId, interruption, manualActive, reload]);
   function applyAction(action: (service: BrewService) => ReturnType<BrewService["startBrewSession"]>) { if (actionLock.current) return; actionLock.current = true; setActing(true); const result = action(new BrewService(new LocalBrewRepository())); if (result.ok) setState({ status: "found", brew: result.value, ...(result.resumed && { notice: "Brew 已在進行中；已依原始時間恢復，沒有重設 startedAt。" }) }); else if (result.code === "brew_not_found") setState({ status: "missing", message: errorCopy[result.code] }); else setState({ status: "found", brew: result.latest ?? (state.status === "found" ? state.brew : result.latest!), notice: errorCopy[result.code], errorCode: result.code }); actionLock.current = false; setActing(false); }
   if (state.status === "loading") return <main className="live-loading" aria-live="polite"><p className="eyebrow">Live Brew</p><h1>Loading your Brew draft…</h1></main>;
+  if (state.status === "error") return <main className="state-page"><p role="alert">{state.message}</p><button className="primary-button" onClick={reload} type="button">{guidedBrewCopy.retryProgress}</button></main>;
   if (state.status === "missing") return <main className="state-page"><p className="eyebrow">Brew not found</p><h1>This draft is not available.</h1><p>{state.message ?? "It may have been removed, or this link belongs to another browser."}</p><div className="form-actions"><Link className="primary-button" href="/discover">Back to Discover</Link><Link className="secondary-button" href="/journal">Back to Journal</Link></div></main>;
   const { brew } = state; const snapshot = brew.recipeSnapshot; const steps = [...snapshot.steps].sort((a, b) => a.order - b.order); const current = steps[brew.currentStageOrder]; const allStagesDone = brew.currentStageOrder >= steps.length && steps.length > 0; const previousTarget = brew.currentStageOrder > 0 ? steps[brew.currentStageOrder - 1]?.targetWaterGrams ?? 0 : 0; const targetPour = current ? Math.max(0, current.targetWaterGrams - previousTarget) : null; const startSeconds = current ? expectedStart(steps, brew.currentStageOrder) : 0;
   const retrySync=()=>{if(actionLock.current)return;actionLock.current=true;setActing(true);const result=new SuggestedPlanService(new LocalBrewRepository(),new LocalSuggestedPlanRepository()).syncSuggestedPlanUsageFromBrew(brew.id);setSyncWarning(result.ok?null:`${result.message} The Brew remains in progress.`);if(result.ok)setState({status:"found",brew,notice:"Next Try status synced."});actionLock.current=false;setActing(false)};
   const completeStage = () => applyAction((service) => service.completeCurrentStage(brew.id, brew.currentStageOrder));
   const completeBrew = () => { if (actionLock.current) return; actionLock.current = true; setActing(true); const result = new BrewService(new LocalBrewRepository()).completeBrewSession(brew.id); if (result.ok) router.push(`/brew/${brew.id}/complete`); else { setState({ status: "found", brew: result.latest ?? brew, notice: errorCopy[result.code], errorCode: result.code }); actionLock.current = false; setActing(false); } };
+  const decideOverrun = (finish: boolean) => {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    const result = finish ? interruption.finish(brew.id, brew.executionRun ?? 1) : interruption.discard(brew.id, brew.executionRun ?? 1);
+    if (result.ok) router.replace(finish ? `/journal/${brew.id}` : `/brew/${brew.id}/prepare`);
+    else { setState({ ...state, notice: result.message }); actionLock.current = false; }
+  };
   if(brew.sourceType==="suggested_plan"&&brew.suggestedPlanHandoff?.userDecision==="pending")return <main className="state-page"><p className="eyebrow">Next Try needs confirmation</p><h1>Review this adjustment before brewing.</h1><p>{brew.suggestedPlanHandoff.description}</p><p><strong>{String(brew.suggestedPlanHandoff.originalValue)}{brew.suggestedPlanHandoff.unit}</strong> → <strong>{String(brew.suggestedPlanHandoff.suggestedValue)}{brew.suggestedPlanHandoff.unit}</strong></p><Link className="primary-button" href={`/brew/${brew.id}/prepare`}>Review Next Try</Link></main>;
   if (steps.length === 0) return <main className="state-page"><p className="eyebrow">Brew data issue</p><h1>This Brew has no stages.</h1><p>Start is unavailable because the immutable Recipe Snapshot has no guidance steps.</p><div className="form-actions"><Link className="primary-button" href={`/recipes/${brew.sourceRecipeId}`}>Recipe Detail</Link><Link className="secondary-button" href="/discover">Discover</Link></div></main>;
   if (brew.executionStatus === "not_started") return <GuidedBrewV1 brew={brew} />;
@@ -47,7 +85,8 @@ export function LiveBrewDraft({ brewId }: { brewId: string }) {
     <section className="live-focus"><p className="eyebrow">{snapshot.title}</p>{allStagesDone ? <div className="all-stages-done" role="status"><strong>所有沖煮階段已完成</strong><p>下一輪將提供 Brew Complete 與結果保存。</p></div> : <><div className="pour-visual" aria-label={`${current?.pattern ?? "guided"} pour pattern preview`}><span>{current?.pattern?.replace("_", " ") ?? "guided pour"}</span></div><strong className="target-weight">{current?.targetWaterGrams ?? 0}g</strong><h2>{current?.title ?? "Stage unavailable"}</h2><p>{current?.instruction ?? "No instruction is available for this stage."}</p><dl className="current-stage-details"><div><dt>Step type</dt><dd>{current?.pattern?.replace("_", " ") ?? "Not specified"}</dd></div><div><dt>Target pour</dt><dd>{targetPour === null ? "—" : `${targetPour}g`}</dd></div><div><dt>Expected start</dt><dd>{formatDuration(startSeconds)}</dd></div><div><dt>Expected duration</dt><dd>{current?.durationSeconds ? formatDuration(current.durationSeconds) : "—"}</dd></div></dl></>}</section>
     <section className="live-stages" aria-live="polite"><div className="section-heading"><div><p className="eyebrow">Stages</p><h2>Full brew plan</h2></div><span>{allStagesDone ? "Stages complete" : brew.executionStatus.replace("_", " ")}</span></div><ol>{steps.map((stage, index) => { const saved = brew.stageResults.find((result) => result.stageOrder === index); const status = saved ? "completed" : index === brew.currentStageOrder ? "current" : "upcoming"; return <li aria-current={status === "current" ? "step" : undefined} className={`stage-${status}`} key={stage.id}><span aria-hidden="true">{saved ? "✓" : index + 1}</span><span><strong>{stage.title}</strong><small>{saved ? `Completed · ${formatDuration(saved.actualDurationSeconds)}` : status === "current" ? "Current stage" : "Not started"}</small></span><span>{stage.targetWaterGrams}g</span><span>{stage.durationSeconds ? formatDuration(stage.durationSeconds) : "—"}</span></li>; })}</ol></section>
     <section className="live-summary"><div><strong>—</strong><span>Current</span></div><div><strong>{snapshot.totalWaterGrams.value}g</strong><span>Target</span></div><div><strong>—</strong><span>Remaining</span></div></section>
-    <p className="leave-note">沖煮仍在進行時可離開此頁；返回後會依保存的 timestamp 繼續顯示。</p>
-    <section className="session-upcoming">{brew.executionStatus === "paused" ? <button className="primary-button" disabled={acting} onClick={() => applyAction((service) => service.resumeBrewSession(brew.id))} type="button">{guidedBrewCopy.resumeBrew}</button> : brew.executionStatus === "in_progress" && !allStagesDone ? <button className="primary-button" disabled={acting} onClick={completeStage} type="button">{acting ? "Saving Stage…" : "Complete Stage"}</button> : brew.executionStatus === "in_progress" && allStagesDone ? <button className="primary-button" disabled={acting} onClick={completeBrew} type="button">{acting ? "Completing Brew…" : state.errorCode ? "Retry Brew Complete" : "Continue to Brew Complete"}</button> : brew.executionStatus === "completed" ? <Link className="primary-button" href={`/brew/${brew.id}/complete`}>View Brew Complete</Link> : <p className="notice">This Brew is {brew.executionStatus}; this round will not reset or transition it.</p>}</section>
+    <LiveBrewWakeLock preparing={false} active={manualActive} />
+    <p className="leave-note">{guidedBrewCopy.interruptionNote}</p>
+    <section className="session-upcoming">{state.overrun ? <><p role="status">{guidedBrewCopy.overrun}</p><button className="primary-button" onClick={() => decideOverrun(true)} type="button">{guidedBrewCopy.finishAndSave}</button><button className="secondary-button" onClick={() => decideOverrun(false)} type="button">{guidedBrewCopy.discard}</button></> : brew.executionStatus === "paused" ? <button className="primary-button" disabled={acting} onClick={() => applyAction((service) => service.resumeBrewSession(brew.id))} type="button">{guidedBrewCopy.resumeBrew}</button> : brew.executionStatus === "in_progress" && !allStagesDone ? <button className="primary-button" disabled={acting} onClick={completeStage} type="button">{acting ? "Saving Stage…" : "Complete Stage"}</button> : brew.executionStatus === "in_progress" && allStagesDone ? <button className="primary-button" disabled={acting} onClick={completeBrew} type="button">{acting ? "Completing Brew…" : state.errorCode ? "Retry Brew Complete" : "Continue to Brew Complete"}</button> : brew.executionStatus === "completed" ? <Link className="primary-button" href={`/brew/${brew.id}/complete`}>View Brew Complete</Link> : <p className="notice">This Brew is {brew.executionStatus}; this round will not reset or transition it.</p>}</section>
   </main>;
 }

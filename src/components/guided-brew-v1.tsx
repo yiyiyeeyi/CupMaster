@@ -1,27 +1,33 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Brew, RecipeStep } from "@/domain";
 import { formatDuration } from "@/domain";
 import { BrewRuntimeController } from "@/application/brew-runtime/brew-runtime-controller";
 import { GuidedBrewPersistenceService, type GuidedBrewClockAnchor } from "@/application/brew-runtime/guided-brew-persistence";
+import { inspectGuidedBrewForeground } from "@/application/brew-runtime/guided-brew-foreground";
 import { GuidedBrewResourceScope, GuidedBrewV1Session, type GuidedBrewStartSource } from "@/application/brew-runtime/guided-brew-v1-session";
 import { BrewSessionCoordinator } from "@/application/brew-session-coordinator";
 import { BrewService } from "@/application/brew-service";
+import { BrewInterruptionService } from "@/application/brew-interruption-service";
 import { SuggestedPlanService } from "@/application/suggested-plan-service";
 import { createBrewRuntimeRecipeDefinition, type NormalizedRect } from "@/domain/brew-runtime";
 import { CameraCaptureService, FrameAnalysisService, FrameSampler, type CameraCaptureSnapshot } from "@/infrastructure/camera";
 import { isWebVoiceStartSupported, WebGuidanceVoiceAdapter, WebVoiceStartAdapter } from "@/infrastructure/voice";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
+import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
 import { BrewBackButton } from "./brew-back-button";
+import { LiveBrewWakeLock } from "./live-brew-wake-lock";
 import { guidedBrewCopy as copy } from "./guided-brew-copy";
 
 const DRIPPER_REGION: Readonly<NormalizedRect> = { x: 0.2, y: 0.22, width: 0.6, height: 0.5 };
 
-function monotonicNow() {
-  return Math.floor(performance.now());
+function executionNow() {
+  // Wall time includes device sleep; camera coordinates keep their own contract.
+  return Date.now();
 }
 
 function withFallbackGuidance(steps: readonly RecipeStep[]): RecipeStep[] {
@@ -51,6 +57,12 @@ function cameraMessage(camera: CameraCaptureSnapshot) {
 }
 
 export function GuidedBrewV1({ brew }: { brew: Brew }) {
+  const router = useRouter();
+  const [interruption] = useState(() => new BrewInterruptionService(new LocalBrewRepository(), new LocalLiveBrewRepository()));
+  const awayRef = useRef(false);
+  const redirectingRef = useRef(false);
+  const overrunRef = useRef(false);
+  const [overrun, setOverrun] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const samplerRef = useRef<FrameSampler | null>(null);
   const samplerUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -60,6 +72,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const startLock = useRef(false);
   const voiceStartRef = useRef<WebVoiceStartAdapter | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [interruptionFailed, setInterruptionFailed] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceStartSupported] = useState(isWebVoiceStartSupported);
@@ -102,7 +115,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       startLock.current = false;
       return;
     }
-    const timestampMs = monotonicNow();
+    const timestampMs = executionNow();
     executionAnchorRef.current = { wallTimeMs: Date.parse(result.brew.startedAt ?? ""), runtimeTimeMs: timestampMs };
     const started = session.start(source, timestampMs);
     setVoiceListening(false);
@@ -151,7 +164,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
         const positioningMotion = diagnostics.suspiciousGlobalMotion || diagnostics.suspectedLightingChange
           ? 1
           : analysis.roiMotionScore;
-        session.observePositioning(sample.timestampMs, positioningMotion);
+        session.observePositioning(executionNow(), positioningMotion);
       });
       samplerRef.current = sampler;
       sampler.start();
@@ -202,9 +215,74 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
 
   useEffect(() => {
     if (snapshot.phase !== "BREWING") return;
-    const interval = window.setInterval(() => session.tick(monotonicNow()), 250);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || awayRef.current) return;
+      if (overrunRef.current) session.observeTime(executionNow());
+      else session.tick(executionNow());
+    }, 250);
     return () => window.clearInterval(interval);
   }, [session, snapshot.phase]);
+
+  const foreground = useCallback(() => {
+      if (redirectingRef.current) return;
+      if (document.visibilityState !== "visible") return;
+      const result = inspectGuidedBrewForeground(interruption, brew.id, session, executionNow());
+      if (!result.ok) {
+        overrunRef.current = false;
+        setOverrun(false);
+        awayRef.current = false;
+        setInterruptionFailed(true);
+        setNotice(`${copy.interruptionFailed} ${result.message}`);
+        return;
+      }
+      setInterruptionFailed(false);
+      setNotice(null);
+      if (result.state === "expired" || (result.state === "setup" && session.getSnapshot().phase === "BREWING")) {
+        redirectingRef.current = true;
+        executionAnchorRef.current = null;
+        session.dispose(); stopCamera();
+        window.location.replace(`/brew/${brew.id}/prepare`);
+        return;
+      }
+      overrunRef.current = result.state === "overrun";
+      setOverrun(overrunRef.current);
+      if (overrunRef.current) setNotice(copy.overrun);
+      awayRef.current = false;
+    }, [brew.id, interruption, session, stopCamera]);
+
+  useEffect(() => {
+    const leave = () => {
+      awayRef.current = true;
+      const result = interruption.leave(brew.id);
+      if (!result.ok) setNotice(result.message);
+    };
+    const visibility = () => {
+      if (document.visibilityState === "visible") foreground();
+      else leave();
+    };
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", leave);
+    window.addEventListener("popstate", leave);
+    window.addEventListener("pageshow", foreground);
+    return () => {
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", leave);
+      window.removeEventListener("popstate", leave);
+      window.removeEventListener("pageshow", foreground);
+      interruption.leave(brew.id);
+    };
+  }, [brew.id, interruption, foreground]);
+
+  function decideOverrun(finish: boolean) {
+    if (startLock.current) return;
+    startLock.current = true;
+    const run = session.getSnapshot().runtime.runNumber;
+    const result = finish ? interruption.finish(brew.id, run) : interruption.discard(brew.id, run);
+    if (!result.ok) { setNotice(result.message); startLock.current = false; return; }
+    executionAnchorRef.current = null;
+    session.dispose(); stopCamera();
+    router.replace(finish ? `/journal/${brew.id}` : `/brew/${brew.id}/prepare`);
+  }
 
   function enableVoiceStart() {
     const active = voiceStartRef.current?.start() ?? false;
@@ -275,7 +353,9 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
         <button className="secondary-button" type="button" disabled={!speechEnabled || snapshot.currentGuidance === null} onClick={() => session.replayGuidance()}>Replay instruction</button>
       </section>
 
+      <LiveBrewWakeLock preparing={isSetup} active={snapshot.phase !== "COMPLETED"} />
       {notice !== null ? <p className="notice" role="status">{notice}</p> : null}
+      {interruptionFailed ? <button className="secondary-button" type="button" onClick={foreground}>{copy.retryProgress}</button> : null}
 
       <section className="guided-actions">
         {isSetup && !withoutCamera ? <button className="secondary-button" type="button" onClick={chooseTimerVoice}>{copy.chooseTimerVoice}</button> : null}
@@ -287,10 +367,14 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
         {snapshot.phase === "POSITIONING" || snapshot.phase === "ALIGNED"
           ? <button className="primary-button" type="button" disabled>Start available when READY</button>
           : null}
-        {snapshot.phase === "BREWING" ? <>
+        {overrun ? <>
+          <p role="status">{copy.overrun}</p>
+          <button className="primary-button" type="button" onClick={() => decideOverrun(true)}>{copy.finishAndSave}</button>
+          <button className="secondary-button" type="button" onClick={() => decideOverrun(false)}>{copy.discard}</button>
+        </> : snapshot.phase === "BREWING" ? <>
           {runtime.state === "paused"
-            ? <button className="secondary-button" type="button" onClick={() => session.resume(monotonicNow())}>Resume</button>
-            : <button className="secondary-button" type="button" onClick={() => session.pause(monotonicNow())}>Pause</button>}
+            ? <button className="secondary-button" type="button" onClick={() => session.resume(executionNow())}>Resume</button>
+            : <button className="secondary-button" type="button" onClick={() => session.pause(executionNow())}>Pause</button>}
         </> : null}
         {snapshot.phase === "COMPLETED" ? <>
           <Link className="primary-button" href={`/brew/${brew.id}/complete`}>Continue to Brew Complete</Link>

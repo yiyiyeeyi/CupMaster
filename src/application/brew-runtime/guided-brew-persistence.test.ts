@@ -8,11 +8,18 @@ import { calculateElapsedSeconds, calculateStageElapsedSeconds } from "@/domain"
 import { BrewRuntimeController } from "./brew-runtime-controller";
 import { GuidedBrewV1Session } from "./guided-brew-v1-session";
 import { GuidedBrewPersistenceService, type GuidedBrewClockAnchor } from "./guided-brew-persistence";
+import { inspectGuidedBrewForeground } from "./guided-brew-foreground";
+import { BrewInterruptionService } from "../brew-interruption-service";
+import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
 
 class TestStorage {
   data = new Map<string, string>();
   fail = false;
-  getItem(key: string) { return this.data.get(key) ?? null; }
+  failLiveRead = false;
+  getItem(key: string) {
+    if (this.failLiveRead && key === "cupmaster:live-brew") throw new Error("read blocked");
+    return this.data.get(key) ?? null;
+  }
   setItem(key: string, value: string) { if (this.fail) throw new Error("write blocked"); this.data.set(key, value); }
 }
 
@@ -49,6 +56,36 @@ function setup(autoPersist = true) {
 }
 
 describe("Guided Brew execution persistence", () => {
+  it("catches up and keeps running when foreground inspection fails, then retries persisted inspection", () => {
+    const { session, read, storage, repository, draft } = setup();
+    const interruption = new BrewInterruptionService(repository, new LocalLiveBrewRepository(storage), () => wallStart + 8_000);
+    session.start("TOUCH", 1_000);
+    storage.failLiveRead = true;
+    expect(inspectGuidedBrewForeground(interruption, draft.id, session, 8_500).ok).toBe(false);
+    expect(session.getSnapshot()).toMatchObject({ phase: "BREWING", elapsedMs: 7_500, stageElapsedMs: 2_500 });
+    expect(read()).toMatchObject({ currentStageOrder: 1, stageResults: [{ actualDurationSeconds: 5 }] });
+    session.tick(9_000);
+    expect(session.getSnapshot().elapsedMs).toBe(8_000);
+    storage.failLiveRead = false;
+    expect(inspectGuidedBrewForeground(interruption, draft.id, session, 9_000)).toMatchObject({ ok: true, state: "active" });
+    expect(read().stageResults).toHaveLength(1);
+    session.dispose();
+  });
+  it("catches up timed stage boundaries after foreground return", () => {
+    const { session, read } = setup();
+    session.start("TOUCH", 1_000);
+    session.catchUp(8_500);
+    expect(session.getSnapshot()).toMatchObject({ phase: "BREWING", elapsedMs: 7_500, stageElapsedMs: 2_500 });
+    expect(read()).toMatchObject({ currentStageOrder: 1, stageResults: [{ actualDurationSeconds: 5, wasSkipped: false }] });
+  });
+  it("keeps an explicit pause out of foreground catch-up", () => {
+    const { session, read } = setup();
+    session.start("TOUCH", 1_000); session.pause(2_000); session.catchUp(8_000);
+    expect(session.getSnapshot().elapsedMs).toBe(1_000);
+    session.resume(10_000); session.catchUp(15_000);
+    expect(session.getSnapshot()).toMatchObject({ elapsedMs: 6_000, stageElapsedMs: 1_000 });
+    expect(read()).toMatchObject({ accumulatedPauseSeconds: 8, currentStageOrder: 1 });
+  });
   it("preserves fractional pause time and records measured stage durations", () => {
     const { session, read, service } = setup();
     session.start("TOUCH", 1_000);

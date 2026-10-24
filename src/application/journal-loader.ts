@@ -20,7 +20,7 @@ export class JournalLoader {
   load(): JournalLoadResult {
     const brewRead = this.brews.listAll();
     if (!brewRead.ok) return { ok: false, cards: [], message: brewRead.message };
-    const visible = brewRead.value.filter((brew) => brew.recordStatus === "draft" || (brew.executionStatus === "completed" && brew.recordStatus === "saved"));
+    const visible = brewRead.value.filter((brew) => brew.executionStatus === "completed" && (brew.recordStatus === "draft" || brew.recordStatus === "saved"));
     const planRead = this.plans.list();
     const allPlans: SuggestedBrewPlan[] = planRead.value;
     const plansBySource = new Map<string, SuggestedBrewPlan[]>();

@@ -1,0 +1,14 @@
+.hint { color: var(--muted); font-size: .8rem; margin-block: .5rem; }
+.info { color: var(--focus); cursor: pointer; min-height: 2rem; min-width: 2rem; }
+.sheet {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px 12px 0 0;
+  bottom: 0; color: var(--ink); inset-block-start: auto; margin: 0 auto; max-height: 80dvh;
+  max-width: 48rem; overflow: auto; padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  width: 100%; animation: slide-in .2s ease-out;
+}
+.sheet header { align-items: center; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
+.sheet h2 { font-size: 1.1rem; }
+.sheet p { margin-block: .75rem; }
+.sheet::backdrop { background: rgb(33 26 22 / 50%); }
+@keyframes slide-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }

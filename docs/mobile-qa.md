@@ -1,5 +1,14 @@
 # Mobile QA
 
+## REQ-35 physical-device follow-up (not yet verified)
+
+Test Screen Wake Lock separately in iOS Safari, an iOS home-screen PWA and
+Android Chrome. Check silent successful acquisition; unsupported/denied fallback
+without blocking Start; the preparation hint, bottom-sheet help and persistent
+opt-out; release on hiding and reacquisition on foreground. Also verify wall-clock
+catch-up after sleep, explicit pause exclusion and the 30-minute interruption rule.
+Desktop API simulation is not evidence of these physical-device results.
+
 ## Scope and environment
 
 - Baseline viewport: 390 CSS px wide.
