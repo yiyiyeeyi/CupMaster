@@ -50,10 +50,70 @@ phone behavior remains REQ-31 QA.
 ## Deployment gate (mandatory)
 
 Do not push or deploy until `20261024110000_brew_execution_timing.sql` has
-actually been applied and verified in local Supabase. SQL contract tests and
-mapper tests do not satisfy this gate. Local application remains unverified
-because the Docker API returned 500. This restriction remains in effect after
-the REQ-4 local commit; no remote database changes are authorized by this work.
+actually been applied and verified. On 2026-10-25 the user explicitly authorized
+verification on cloud project `ouniwzdxbcrektzynkak` instead of local Docker.
+Only this migration is authorized; REQ-37b schema is excluded. SQL contract tests
+and mapper tests do not satisfy this gate. The user subsequently approved using
+the connected Supabase tool instead of CLI authentication/link/native dry-run.
+The gate is now satisfied by the cloud verification below.
+
+### Cloud verification attempt (2026-10-25): stopped at CLI authentication
+
+- Read-only baseline confirmed profiles=1, brews=0, suggested_plans=0,
+  auth.users=1. No account details or credentials were copied into this document.
+- Before application, brews.accumulated_pause_seconds is integer; RLS is enabled
+  (not forced), with brews_insert_own / brews_select_own / brews_update_own
+  policies scoped to authenticated users and auth.uid() = user_id. Existing
+  column and constraint definitions were inspected for subsequent comparison.
+- CLI help initially could not write telemetry under the restricted execution
+  environment; help succeeded with the normal CLI execution permissions.
+- `supabase link --project-ref ouniwzdxbcrektzynkak` then exited 1 with
+  `LegacyPlatformAuthRequiredError`: access token not provided; CLI login is
+  required. Stopped at this first verification-step failure as instructed.
+- No dry-run, migration application, INSERT/ROLLBACK test or type regeneration
+  was performed. No SQL was edited or retried, no cloud schema/data was changed,
+  and no commit/push/deployment was made. Steps 2 and 3 have not started.
+- Resume only after the user authenticates Supabase CLI, then repeat the
+  authorized link/dry-run sequence. Do not supply tokens in tracked files or chat.
+
+### Cloud verification completed (2026-10-25)
+
+The user's later instruction supersedes the CLI-only requirement above. The
+connected Supabase tool was used; no CLI native dry-run is claimed. Read-only
+migration history and the two local SQL files confirmed only the timing SQL was
+pending. The exact timing SQL was applied once, unchanged, with no REQ-37b DDL.
+
+- Cloud history: core `20260804061934`; connector-generated timing version
+  `20261025142700`, name `brew_execution_timing`. This maps to local file
+  `20261024110000_brew_execution_timing.sql`. The connector assigns its own
+  version; future CLI migration work must reconcile this history mapping before
+  db push, rather than trying to apply the same ALTER TABLE again. History was
+  not manually rewritten in this verification.
+- `accumulated_pause_seconds`: numeric, NOT NULL, existing default retained.
+  `actual_total_time_seconds`: integer, nullable. `execution_run`: integer,
+  nullable. `current_stage_paused_seconds`: numeric, nullable.
+- All 18 existing constraints remain, with the pause check's implicit zero cast
+  changed to numeric as expected; two new checks require positive execution_run
+  or null and nonnegative stage pauses or null. Existing foreign keys remain.
+- RLS remains enabled, not forced. The three INSERT/SELECT/UPDATE ownership
+  policies retain the same authenticated roles and auth.uid() ownership checks.
+- A single BEGIN/ROLLBACK transaction selected the existing user's UUID without
+  exposing it, set local authenticated role and auth.uid(), inserted a synthetic
+  SQL fixture, then read back and asserted pause=7.125, total=9, run=2,
+  stage-pause=1.25. Deferred constraints were checked before rollback. The final
+  query confirmed brews=0. This checks SQL persistence/RLS, not JSON mapper shape;
+  existing mapper regression tests separately cover application payloads.
+- Regenerated `src/types/database.types.ts` directly from cloud. The timing
+  types match the reviewed contract; PostgREST reports 14.17 and generator output
+  normalizes ordering/conditional-type parentheses.
+
+The user-authorized cloud migration gate is cleared. Local Docker remains
+unverified historically; this does not block the explicitly authorized feature
+branch push. No main merge, manual deployment, REQ-37b schema or user data retained.
+
+Post-generation checks passed: lint, typecheck, production build and all 56 test
+files / 864 tests (`--maxWorkers=1 --testTimeout=30000`); diff --check passed.
+Final cloud counts remain profiles=1, brews=0, suggested_plans=0, auth.users=1.
 
 Final scope correction: remove `skipCurrentStage`, `STAGE_SKIPPED`, the runtime
 skip marker and the widened boolean stage-result contract. Persisted/domain
