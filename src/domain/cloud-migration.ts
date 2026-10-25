@@ -40,7 +40,7 @@ export interface LocalCloudMigrationGraph { profile: unknown | null; brews: read
 
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
-  for (const brew of input.brews) if (brew.appliedAdjustment !== undefined || brew.legacyPreparationId) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "新準備資料暫保留本機，請待 REQ-37b；未寫入雲端新表。" });
+  for (const brew of input.brews) if (brew.appliedAdjustment !== undefined || brew.legacyPreparationId || brew.sourcePreparationId) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "新準備資料暫保留本機，請待 REQ-37b；未寫入雲端新表。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);
   for (const plan of input.suggestedPlans) planCounts.set(plan.id, (planCounts.get(plan.id) ?? 0) + 1);

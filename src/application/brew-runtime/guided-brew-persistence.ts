@@ -1,3 +1,4 @@
+import { writeBrewWithPreparationCleanup } from "@/application/preparation-completion";
 import type { Brew, BrewStageResult } from "@/domain";
 import type { BrewRepository } from "@/repositories/brew-repository";
 import type { BrewOperationResult } from "../brew-service";
@@ -70,7 +71,7 @@ export class GuidedBrewPersistenceService {
       stageResults: results,
       updatedAt: new Date().toISOString(),
     };
-    const saved = this.repository.updateDraft(updated);
+    const saved = writeBrewWithPreparationCleanup(this.repository, updated);
     return saved.ok ? { ok: true, value: saved.value }
       : { ok: false, code: "persistence_failed", message: saved.message, latest: brew };
   }

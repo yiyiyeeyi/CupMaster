@@ -9,10 +9,10 @@ const entrySchema = z.object({ id: z.string(), snapshot: brewRecipeSnapshotSchem
   appliedAdjustment: appliedBrewAdjustmentSchema.nullable(), createdAt: z.string().datetime(), updatedAt: z.string().datetime(), legacyPlanId: z.string().optional(), legacyBrewId: z.string().optional() });
 const stateSchema = z.object({ version: z.literal(1), entries: z.array(entrySchema), redirects: z.record(z.string(), z.string()),
   lineage: z.record(z.string(), z.object({ sourceBrewId: z.string().nullable(), appliedAdjustment: appliedBrewAdjustmentSchema.nullable() })),
-  processedRaw: z.string().nullable(), backups: z.array(z.object({ plans: z.string(), brews: z.string().nullable() })), warnings: z.array(z.string()) });
+  processedRaw: z.string().nullable(), backups: z.array(z.object({ plans: z.string(), brews: z.string().nullable() })), warnings: z.array(z.string()), deletedIds: z.array(z.string()).default([]) });
 type State = z.infer<typeof stateSchema>;
 type Port = Pick<Storage, "getItem" | "setItem">;
-const empty = (): State => ({ version: 1, entries: [], redirects: {}, lineage: {}, processedRaw: null, backups: [], warnings: [] });
+const empty = (): State => ({ version: 1, entries: [], redirects: {}, lineage: {}, processedRaw: null, backups: [], warnings: [], deletedIds: [] });
 export class LocalBrewPreparationRepository {
   constructor(private readonly storage?: Port) {}
   private port() { const port = this.storage ?? (typeof window === "undefined" ? null : window.localStorage); if (!port) throw new Error("本機儲存不可用。"); return port; }
@@ -29,10 +29,16 @@ export class LocalBrewPreparationRepository {
   save(seed: BrewPreparation, id: string, at: string) {
     if (!isValidPreparation(seed)) return { ok: false as const, message: "請檢查沖煮參數與階段秒數。" };
     const read = this.read(); if (!read.ok) return read;
+    if (read.value.deletedIds.includes(id)) return { ok: false as const, message: "這份準備紀錄已刪除，請返回 Journal。" };
     const existing = read.value.entries.find(entry => entry.id === id);
-    const entry = entrySchema.safeParse({ ...seed, id, createdAt: existing?.createdAt ?? at, updatedAt: at });
+    const entry = entrySchema.safeParse({ ...existing, ...seed, id, createdAt: existing?.createdAt ?? at, updatedAt: at });
     if (!entry.success) return { ok: false as const, message: "準備資料不完整，未保存。" };
     return this.write({ ...read.value, entries: [...read.value.entries.filter(item => item.id !== id), entry.data] });
+  }
+  remove(id: string) {
+    const read = this.read(); if (!read.ok) return read;
+    if (read.value.deletedIds.includes(id)) return { ok: true as const };
+    return this.write({ ...read.value, entries: read.value.entries.filter(entry => entry.id !== id), deletedIds: [...read.value.deletedIds, id] });
   }
   /** One atomic envelope contains converted data, mappings and untouched originals. */
   migrate() {
@@ -91,6 +97,7 @@ export class LocalBrewPreparationRepository {
             state.lineage[result.id] = { sourceBrewId: source?.id ?? null, appliedAdjustment: confirmed.appliedAdjustment }; continue;
           }
           const id = `legacy-plan:${plan.id}`;
+          if (state.deletedIds.includes(id)) continue;
           if (result && state.redirects[result.id] && state.redirects[result.id] !== id) { state.warnings.push(`${plan.id}: duplicate_result`); continue; }
           const entry = entrySchema.parse({ ...confirmed, ...(result && { snapshot: result.recipeSnapshot, plan: result.brewPlan }), id,
             createdAt: plan.createdAt, updatedAt: plan.updatedAt, legacyPlanId: plan.id, ...(result && { legacyBrewId: result.id }) });

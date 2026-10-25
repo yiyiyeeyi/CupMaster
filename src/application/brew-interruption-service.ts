@@ -1,3 +1,4 @@
+import { writeBrewWithPreparationCleanup } from "@/application/preparation-completion";
 import type { Brew } from "@/domain";
 import { calculateActiveSeconds } from "@/domain/brew-timer";
 import type { BrewRepository } from "@/repositories/brew-repository";
@@ -90,7 +91,7 @@ export class BrewInterruptionService {
       const projected = projectInterruptedProgress(brew, now);
       if (!projected) return invalid();
       if (projected.currentStageOrder !== brew.currentStageOrder) {
-        const written = this.brews.updateDraft({ ...projected, updatedAt: iso(now) });
+        const written = writeBrewWithPreparationCleanup(this.brews, { ...projected, updatedAt: iso(now) });
         if (!written.ok) return written;
         value = written.value;
       }
@@ -112,7 +113,7 @@ export class BrewInterruptionService {
       if (calculateActiveSeconds(read.value.startedAt, read.value.accumulatedPauseSeconds, reference) <= read.value.recipeSnapshot.expectedTimeSeconds.value) return invalid();
       const completed = projectInterruptedProgress(read.value, now, true);
       if (!completed) return invalid();
-      const written = this.brews.updateDraft(completed);
+      const written = writeBrewWithPreparationCleanup(this.brews, completed);
       if (!written.ok) return written;
     }
     const saved = new BrewService(this.brews).saveCompletedBrew(id);
@@ -125,7 +126,7 @@ export class BrewInterruptionService {
     const brew = read.value;
     if (!brew || brew.recordStatus !== "draft") return invalid();
     if (expectedRun !== undefined && (brew.executionRun ?? 1) !== expectedRun) return invalid();
-    const reset = this.brews.updateDraft({ ...brew, executionRun: (brew.executionRun ?? 1) + 1, executionStatus: "not_started", currentStageOrder: 0, currentStageStartedAt: null, currentStagePausedSeconds: 0, startedAt: null, pausedAt: null, completedAt: null, accumulatedPauseSeconds: 0, actualTotalTimeSeconds: null, stageResults: [], updatedAt: iso(this.now()) });
+    const reset = writeBrewWithPreparationCleanup(this.brews, { ...brew, executionRun: (brew.executionRun ?? 1) + 1, executionStatus: "not_started", currentStageOrder: 0, currentStageStartedAt: null, currentStagePausedSeconds: 0, startedAt: null, pausedAt: null, completedAt: null, accumulatedPauseSeconds: 0, actualTotalTimeSeconds: null, stageResults: [], updatedAt: iso(this.now()) });
     if (reset.ok) this.live.clear(id);
     return reset;
   }

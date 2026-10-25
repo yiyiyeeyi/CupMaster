@@ -159,3 +159,11 @@ Cloud 4-3 is QA infrastructure, not a new product slice: deterministic Local smo
 ## REQ-37 local slice
 
 One recommendation per cup; shared Quick Prepare for Recipe, repeat cup and explicit Analysis application. SavedBrewPreparation/AppliedBrewAdjustment are versioned local data, with original legacy backups, hidden unstarted Brew aliases and start guards. Journey 04 owns the pending-list UI, REQ-53 owns legacy deletion, REQ-37b owns cloud schema/mapper/migration v2. No commit/push/deployment in this delivery.
+# REQ-38 / Remember
+
+Journal combines completed Brews with the existing local SavedBrewPreparation
+format, three filters and local-date grouping. Preparations precede completed
+groups in all. A completed/saved Brew consumes its source preparation only after
+the Brew write succeeds; Journal retries failed removal. No new cloud schema,
+picker or navigation redesign. One browser-local notice and one Journal-only
+conversion warning replace repeated notices.

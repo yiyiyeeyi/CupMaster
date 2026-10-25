@@ -17,6 +17,7 @@ export function BrewPreparationForm({ sourceBrewId, recommendationId, preparatio
   const [service] = useState(() => new BrewPreparationService(new LocalBrewRepository(), new LocalBrewPreparationRepository()));
   const savedId = useRef<string | null>(preparationId ?? null);
   useEffect(() => { const timer = window.setTimeout(() => {
+    savedId.current = preparationId ?? null;
     if (recipe) { const baseline = createBrewPlan(recipe, createQuickPrepareDefaults(recipe)); setSeed({ ...baseline, sourceBrewId: null, appliedAdjustment: null }); return; }
     const result = service.load({ sourceBrewId, recommendationId, preparationId });
     if (result.ok) { setSeed(result.value); setOutdated(result.outdated); } else setError(result.message);
@@ -27,7 +28,7 @@ export function BrewPreparationForm({ sourceBrewId, recommendationId, preparatio
       const id = savedId.current ?? crypto.randomUUID(); savedId.current = id;
       const result = new LocalBrewPreparationRepository().save(seed, id, new Date().toISOString());
       if (result.ok) { router.push("/journal"); return; } else setError(result.message);
-    } else { const result = service.create(seed); if (result.ok) { router.push(`/brew/${result.value.id}`); return; } else setError(result.message); }
+    } else { const result = service.create(seed, preparationId); if (result.ok) { router.push(`/brew/${result.value.id}`); return; } else setError(result.message); }
     lock.current = false;
   }
   if (!seed) return <main className="state-page"><h1>Quick Prepare</h1><p role="status">{error ?? copy.loading}</p><Link href="/journal">Journal</Link></main>;

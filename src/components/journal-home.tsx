@@ -1,33 +1,83 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import type { Brew } from "@/domain";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatDuration, isAnalysisOutdated } from "@/domain";
+import { groupJournal, journalDateKey, journalFilter, type JournalFilter, type JournalItem } from "@/domain/journal";
+import type { SavedBrewPreparation } from "@/domain/brew-preparation";
+import { JournalService } from "@/application/journal-service";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
-import { brewRecordCopy as copy } from "./brew-record-copy";
+import { journalCopy as copy } from "./journal-copy";
+import styles from "./brew-return-dialog.module.css";
 
 export function JournalHome() {
-  const [brews, setBrews] = useState<Brew[] | null>(null), [error, setError] = useState<string | null>(null), [reload, setReload] = useState(0);
-  useEffect(() => { const timer = window.setTimeout(() => {
-    const migration = new LocalBrewPreparationRepository().migrate();
-    if (!migration.ok) { setError(migration.message); return; }
-    const result = new LocalBrewRepository().listJournalEntries();
-    if (result.ok) { setBrews(result.value); setError(null); } else setError(result.message);
-  }, 0); return () => window.clearTimeout(timer); }, [reload]);
-  if (error) return <main className="state-page"><p role="alert">{error}</p><button type="button" onClick={() => setReload(value => value + 1)}>{copy.retry}</button></main>;
-  if (!brews) return <main className="route-loading"><h1>Journal</h1></main>;
-  return <main className="journal-page"><header><p className="eyebrow">Remember</p><h1>Journal</h1><p>{copy.journalDescription}</p></header>
-    {brews.length === 0 ? <section className="empty-state"><h2>{copy.emptyJournal}</h2><Link className="primary-button" href="/discover">{copy.chooseRecipe}</Link></section> :
-      <section className="journal-section"><div className="section-heading"><h2>{copy.completed}</h2><span>{brews.length}</span></div><div className="journal-list">
-        {brews.map(brew => <Link className="journal-card" href={`/journal/${brew.id}`} key={brew.id}><div>
-          <span className="status-line">{copy.completed}</span><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? "未記錄咖啡豆"} / {brew.recipeSnapshot.title}</h3>
-          {brew.appliedAdjustment ? <p className="journal-adjustment">{copy.appliedSuggestion}：{brew.appliedAdjustment.adjustment.description}</p> : null}
-          <p>{new Date(brew.completedAt ?? brew.updatedAt).toLocaleString()}</p>
-          <p>{brew.flavorFeedback ? `${copy.feelingRecorded} · ${copy[brew.flavorFeedback.overallImpression]}` : brew.feedbackStatus === "skipped" ? "Skipped" : "Awaiting feedback"} · {isAnalysisOutdated(brew) ? "Analysis outdated" : brew.analysisStatus} · {brew.recordDetails ? "Details added" : "Details missing"}</p>
-          <dl><div><dt>Time</dt><dd>{brew.actualTotalTimeSeconds === null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</dd></div><div><dt>Dose</dt><dd>{brew.recordDetails?.actualDoseGrams == null ? `${brew.recipeSnapshot.doseGrams.value}g target` : `${brew.recordDetails.actualDoseGrams}g actual`}</dd></div><div><dt>Water</dt><dd>{brew.recordDetails?.actualWaterGrams == null ? `${brew.recipeSnapshot.totalWaterGrams.value}g target` : `${brew.recordDetails.actualWaterGrams}g actual`}</dd></div></dl>
-          <strong className="journal-card-action">Brew Detail</strong>
-        </div><span aria-hidden="true">→</span></Link>)}
-      </div></section>}
+  const router = useRouter(), search = useSearchParams(), filter = journalFilter(search.get("filter"));
+  const [service] = useState(() => new JournalService(new LocalBrewRepository(), new LocalBrewPreparationRepository()));
+  const [data, setData] = useState<ReturnType<JournalService["load"]> | null>(null);
+  const [deleting, setDeleting] = useState<SavedBrewPreparation | null>(null), [deleteError, setDeleteError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const dialog = useRef<HTMLDialogElement>(null), deleteButton = useRef<HTMLButtonElement | null>(null);
+  function reload() { setData(service.load()); setNow(new Date()); }
+  useEffect(() => {
+    function refresh() { if (document.visibilityState === "visible") { setData(service.load()); setNow(new Date()); } }
+    const timer = window.setTimeout(refresh, 0), midnight = window.setInterval(() => setNow(new Date()), 30_000);
+    document.addEventListener("visibilitychange", refresh); window.addEventListener("pageshow", refresh); window.addEventListener("storage", refresh);
+    return () => { window.clearTimeout(timer); window.clearInterval(midnight); document.removeEventListener("visibilitychange", refresh); window.removeEventListener("pageshow", refresh); window.removeEventListener("storage", refresh); };
+  }, [service]);
+  useEffect(() => { if (deleting) dialog.current?.showModal(); else dialog.current?.close(); }, [deleting]);
+  function closeDialog() { setDeleting(null); setDeleteError(null); deleteButton.current?.focus(); }
+  function remove() {
+    if (!deleting) return;
+    const result = service.remove(deleting.id);
+    if (!result.ok) { setDeleteError(result.message); return; }
+    closeDialog(); reload();
+  }
+  function choose(value: JournalFilter) {
+    const params = new URLSearchParams(search.toString());
+    if (value === "all") params.delete("filter"); else params.set("filter", value);
+    router.replace(`/journal${params.size ? `?${params}` : ""}`, { scroll: false });
+  }
+  function dateLabel(date: string) {
+    if (date === journalDateKey(now)) return copy.today;
+    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+    return date === journalDateKey(yesterday) ? copy.yesterday : date.replaceAll("-", "/");
+  }
+  const groups = data ? groupJournal(data.brews, data.preparations, filter) : [];
+  function card(item: JournalItem) {
+    if (item.kind === "preparations") {
+      const entry = item.preparation, href = `/brew/prepare?preparationId=${encodeURIComponent(entry.id)}`;
+      return <article className="journal-card" key={entry.id}><div>
+        <span className="status-line">{copy.preparations}</span><h3>{entry.snapshot.bean?.name ?? copy.noBean} / {entry.snapshot.title}</h3>
+        {entry.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{entry.appliedAdjustment.adjustment.description}</p>}
+        <p>{copy.savedDate}：{new Date(entry.updatedAt).toLocaleString("zh-TW")}</p>
+        <dl><div><dt>{copy.time}</dt><dd>{formatDuration(entry.snapshot.expectedTimeSeconds.value)}</dd></div><div><dt>{copy.dose}</dt><dd>{entry.snapshot.doseGrams.value}g</dd></div><div><dt>{copy.water}</dt><dd>{entry.snapshot.totalWaterGrams.value}g</dd></div></dl>
+        <div className={styles.actions}><Link className="primary-button" href={href}>{copy.start}</Link><Link className="secondary-button" href={href}>{copy.edit}</Link>
+          <button className="secondary-button" type="button" onClick={event => { deleteButton.current = event.currentTarget; setDeleting(entry); setDeleteError(null); }}>{copy.remove}</button></div>
+      </div></article>;
+    }
+    const brew = item.brew;
+    return <Link className="journal-card" href={`/journal/${encodeURIComponent(brew.id)}`} key={brew.id}><div>
+      <span className="status-line">{copy.completed}</span><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? copy.noBean} / {brew.recipeSnapshot.title}</h3>
+      {brew.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{brew.appliedAdjustment.adjustment.description}</p>}
+      <p>{copy.completedDate}：{new Date(item.at).toLocaleString("zh-TW")}</p>
+      <p>{brew.flavorFeedback ? copy.feedbackAdded : brew.feedbackStatus === "skipped" ? copy.feedbackSkipped : copy.feedbackMissing} · {isAnalysisOutdated(brew) ? copy.analysisOutdated : brew.analysis ? copy.analysisAdded : copy.analysisMissing}</p>
+      <dl><div><dt>{copy.time}</dt><dd>{brew.actualTotalTimeSeconds === null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</dd></div><div><dt>{copy.dose}</dt><dd>{brew.recordDetails?.actualDoseGrams == null ? `${brew.recipeSnapshot.doseGrams.value}g ${copy.target}` : `${brew.recordDetails.actualDoseGrams}g ${copy.actual}`}</dd></div><div><dt>{copy.water}</dt><dd>{brew.recordDetails?.actualWaterGrams == null ? `${brew.recipeSnapshot.totalWaterGrams.value}g ${copy.target}` : `${brew.recordDetails.actualWaterGrams}g ${copy.actual}`}</dd></div></dl>
+      <strong className="journal-card-action">{copy.details}</strong>
+    </div><span aria-hidden="true">→</span></Link>;
+  }
+  const failed = !!data && (filter !== "preparations" && !!data.brewError || filter !== "completed" && !!data.preparationError);
+  return <main className="journal-page"><header><p className="eyebrow">Remember</p><h1>Journal</h1><p>{copy.description}</p></header>
+    <p className="notice">{copy.localNotice}</p>
+    <nav className="section-heading" aria-label={copy.filters}>{(["all", "completed", "preparations"] as const).map(value => <button className="secondary-button" type="button" key={value} aria-pressed={filter === value} onClick={() => choose(value)}>{copy[value]}</button>)}</nav>
+    {data?.brewError && <p role="alert">{data.brewError}<button type="button" onClick={reload}>{copy.retry}</button></p>}
+    {data?.preparationError && <p role="alert">{data.preparationError}<button type="button" onClick={reload}>{copy.retry}</button></p>}
+    {!!data?.warnings.length && <p className="notice" role="status">{copy.conversionWarning} {data.warnings.length} {copy.warningCount}</p>}
+    {!data ? <p role="status">{copy.loading}</p> : groups.length === 0 ? !failed && <section className="empty-state"><h2>{filter === "completed" ? copy.emptyCompleted : filter === "preparations" ? copy.emptyPreparations : copy.emptyAll}</h2>{filter === "preparations" && <p>{copy.saveHint}</p>}<Link className="primary-button" href="/discover">{copy.chooseRecipe}</Link></section> :
+      groups.map(group => <section className="journal-section" key={`${group.kind}:${group.date}`}><div className="section-heading"><h2>{copy[group.kind]} · {dateLabel(group.date)}</h2><span>{group.items.length}</span></div><div className="journal-list">{group.items.map(card)}</div></section>)}
+    <dialog ref={dialog} className={styles.dialog} aria-labelledby="preparation-delete-question" onCancel={closeDialog}>
+      <p id="preparation-delete-question">{copy.deleteQuestion}</p>{deleting && <p>{deleting.snapshot.title}</p>}{deleteError && <p role="alert">{deleteError}</p>}
+      <div className={styles.actions}><button className="secondary-button" type="button" onClick={closeDialog}>{copy.cancel}</button><button className="primary-button" type="button" onClick={remove}>{copy.remove}</button></div>
+    </dialog>
   </main>;
 }

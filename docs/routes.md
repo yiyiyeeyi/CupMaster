@@ -86,3 +86,10 @@ Future nested routes should follow the four slices and App Router conventions. D
 ## REQ-37 local preparation
 
 `/brew/prepare` reads sourceBrewId/recommendationId/preparationId and shares the Recipe Quick Prepare form. `/brew/[brewId]/prepare` keeps same-cup reset semantics. Converted legacy unstarted IDs redirect from both Brew routes before execution UI mounts. Old Plan/creation/list URLs are compatibility redirects only; normal UI has no Next Try links. See docs/project/req-37-local-preparation.md.
+# REQ-38 Journal behavior
+
+`/journal?filter=all|completed|preparations` filters completed Brews and the existing
+SavedBrewPreparation entries. The default/unknown filter is all. Preparation cards
+open `/brew/prepare?preparationId=…` for confirmation/editing; delete requires
+confirmation. Successful completed-and-saved Brews consume sourcePreparationId;
+Journal retries secondary cleanup without undoing saved Brews. This is local only.

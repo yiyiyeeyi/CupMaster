@@ -32,10 +32,15 @@ export class BrewPreparationService {
     }
     return { ok: true as const, value, outdated: !!input.recommendationId && isAnalysisOutdated(brew) };
   }
-  create(seed: BrewPreparation) {
+  create(seed: BrewPreparation, sourcePreparationId?: string) {
+    if (sourcePreparationId) {
+      const read = this.preparations.read();
+      if (!read.ok) return read;
+      if (!read.value.entries.some(entry => entry.id === sourcePreparationId)) return { ok: false as const, message: "找不到準備紀錄，請返回 Journal。" };
+    }
     const normalized = synchronizePreparation(seed), at = this.now();
     if (!isValidPreparation(normalized)) return { ok: false as const, message: "請檢查沖煮參數與階段秒數。" };
-    const draft: Brew = { id: this.id(), sourceRecipeId: normalized.plan.sourceRecipeId, sourceType: seed.sourceBrewId ? "previous_brew" : "recipe", sourceBrewId: seed.sourceBrewId ?? undefined,
+    const draft: Brew = { id: this.id(), ...(sourcePreparationId && { sourcePreparationId }), sourceRecipeId: normalized.plan.sourceRecipeId, sourceType: seed.sourceBrewId ? "previous_brew" : "recipe", sourceBrewId: seed.sourceBrewId ?? undefined,
       ...(seed.sourceBrewId || seed.appliedAdjustment ? { appliedAdjustment: normalized.appliedAdjustment } : {}), suggestedPlanHandoff: null, brewPlan: { ...normalized.plan, id: this.id(), createdAt: at },
       recipeSnapshot: { ...normalized.snapshot, createdAt: at }, executionStatus: "not_started", recordStatus: "draft", feedbackStatus: "not_requested",
       analysisStatus: "not_requested", analysis: null, analysisAttempt: null, currentStageOrder: 0, currentStageStartedAt: null, stageResults: [],

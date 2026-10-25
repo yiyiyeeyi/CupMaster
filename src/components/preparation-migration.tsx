@@ -1,16 +1,17 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { preparationCopy as copy } from "./brew-preparation-copy";
 
 export function PreparationMigration() {
+  const pathname = usePathname();
   const [message, setMessage] = useState<string | null>(null);
-  function migrate() { const result = new LocalBrewPreparationRepository().migrate(); setMessage(result.ok ? (result.value.warnings.length ? `${copy.legacyMissing} ${result.value.warnings.length}` : null) : result.message); }
+  function migrate() { const result = new LocalBrewPreparationRepository().migrate(); setMessage(result.ok ? null : result.message); }
   useEffect(() => { const timer = window.setTimeout(migrate, 0); return () => window.clearTimeout(timer); }, []);
-  return message ? <aside className="notice" role="status">{message}<button type="button" onClick={migrate}>{copy.retry}</button></aside> : null;
+  return message && pathname !== "/journal" ? <aside className="notice" role="status">{message}<button type="button" onClick={migrate}>{copy.retry}</button></aside> : null;
 }
 export function LegacyPreparationGate({ brewId, planId, children }: { brewId?: string; planId?: string; children?: React.ReactNode }) {
   const router = useRouter(), [ready, setReady] = useState(false), [error, setError] = useState<string | null>(null);

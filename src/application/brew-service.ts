@@ -1,3 +1,5 @@
+import type { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
+import { writeBrewWithPreparationCleanup } from "@/application/preparation-completion";
 import type { Brew, BrewQuickRating, BrewRecordDetailsInput, BrewStageResult, FlavorFeedback, FlavorFeedbackInput, QuickPrepareInput, Recipe } from "@/domain";
 import { quickPrepareSchema } from "@/domain";
 import { assessAnalysisDataQuality, brewAnalysisResultSchema, buildBrewAnalysisInput, brewRecordDetailsInputSchema, createAnalysisFingerprint, flavorFeedbackInputSchema, normalizeBrewRecordDetailsInput } from "@/domain";
@@ -11,7 +13,7 @@ export type BrewDomainErrorCode = "brew_not_found" | "invalid_execution_status" 
 export type BrewOperationResult = { ok: true; value: Brew; resumed?: boolean } | { ok: false; code: BrewDomainErrorCode; message: string; latest?: Brew };
 export type LatestBrewResult = { ok: true; value: Brew | null } | { ok: false; code: "persistence_failed"; message: string };
 export type JournalResult = { ok: true; value: Brew[]; notice?: string } | { ok: false; code: "persistence_failed"; message: string; value: Brew[] };
-export interface BrewServiceDependencies { now?: () => string; createId?: () => string; analysisProvider?: BrewAnalysisProvider; }
+export interface BrewServiceDependencies { preparations?: LocalBrewPreparationRepository; now?: () => string; createId?: () => string; analysisProvider?: BrewAnalysisProvider; }
 
 export class BrewService {
   constructor(private readonly repository: BrewRepository, private readonly dependencies: BrewServiceDependencies = {}) {}
@@ -28,7 +30,7 @@ export class BrewService {
     const now=this.now(),dose=resolve(parsed.data.coffeeDose,brew.recipeSnapshot.doseGrams,parsed.data.coffeeDose!==brew.recipeSnapshot.doseGrams.value),water=resolve(parsed.data.waterTotal,brew.recipeSnapshot.totalWaterGrams,parsed.data.waterTotal!==brew.recipeSnapshot.totalWaterGrams.value),temperature=resolve(parsed.data.waterTemperature,brew.recipeSnapshot.temperatureCelsius,parsed.data.waterTemperature!==brew.recipeSnapshot.temperatureCelsius.value),dripper=resolve(parsed.data.dripper,brew.recipeSnapshot.dripper,parsed.data.dripper!==brew.recipeSnapshot.dripper.value),grind=brew.recipeSnapshot.grindDescription?resolve(parsed.data.grindSetting??"",brew.recipeSnapshot.grindDescription,(parsed.data.grindSetting??"")!==brew.recipeSnapshot.grindDescription.value):undefined;
     const snapshot={...brew.recipeSnapshot,doseGrams:dose,totalWaterGrams:water,temperatureCelsius:temperature,dripper,...(grind&&{grindDescription:grind}),ratio:water.value/dose.value,userOverrides:{...brew.recipeSnapshot.userOverrides,...(dose.source==="user_override"&&{doseGrams:dose.value}),...(water.source==="user_override"&&{totalWaterGrams:water.value}),...(temperature.source==="user_override"&&{temperatureCelsius:temperature.value}),...(dripper.source==="user_override"&&{dripper:dripper.value}),...(grind?.source==="user_override"&&{grindDescription:grind.value})},...(parsed.data.beanName&&{bean:{id:`draft:${brew.id}:bean`,name:parsed.data.beanName}}),equipment:{...brew.recipeSnapshot.equipment,dripper:dripper.value,...(parsed.data.equipmentNotes&&{notes:parsed.data.equipmentNotes})},...(parsed.data.userGoal&&{userGoal:parsed.data.userGoal}),createdAt:now};
     const plan={...brew.brewPlan,coffeeDose:dose,waterTotal:water,waterTemperature:temperature,dripper,...(grind&&{grindSetting:grind}),ratio:snapshot.ratio,...(parsed.data.beanName&&{beanMetadata:{name:parsed.data.beanName}}),...(parsed.data.equipmentNotes&&{equipmentNotes:parsed.data.equipmentNotes}),...(parsed.data.userGoal&&{userGoal:parsed.data.userGoal})};
-    const updated:Brew={...brew,brewPlan:plan,recipeSnapshot:snapshot,suggestedPlanHandoff:handoff?{...handoff,userDecision:suggestedChanged?"overridden":"accepted",confirmedAt:now}:null,updatedAt:now};const written=this.repository.updateDraft(updated);return written.ok?{ok:true,value:written.value}:{ok:false,code:"persistence_failed",message:written.message,latest:brew};
+    const updated:Brew={...brew,brewPlan:plan,recipeSnapshot:snapshot,suggestedPlanHandoff:handoff?{...handoff,userDecision:suggestedChanged?"overridden":"accepted",confirmedAt:now}:null,updatedAt:now};const written=writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);return written.ok?{ok:true,value:written.value}:{ok:false,code:"persistence_failed",message:written.message,latest:brew};
   }
 
   startBrewSession(brewId: string): BrewOperationResult {
@@ -43,7 +45,7 @@ export class BrewService {
     if (brew.recipeSnapshot.steps.length === 0) return { ok: false, code: "no_stages", message: "This Brew has no snapshot stages to guide.", latest: brew };
     const now = this.now();
     const updated: Brew = { ...brew, executionStatus: "in_progress", startedAt: now, currentStageStartedAt: now, currentStageOrder: 0, updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -62,7 +64,7 @@ export class BrewService {
       currentStageOrder: 0, currentStageStartedAt: null, currentStagePausedSeconds: 0,
       stageResults: [], actualTotalTimeSeconds: null, updatedAt: this.now(),
     };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value }
       : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
@@ -85,7 +87,7 @@ export class BrewService {
       currentStagePausedSeconds: (brew.currentStagePausedSeconds ?? 0) + pauseMs / 1_000,
       updatedAt: now,
     };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value, resumed: true }
       : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
@@ -113,7 +115,7 @@ export class BrewService {
         updated.currentStageStartedAt = null;
         updated.actualTotalTimeSeconds = Math.floor(calculateActiveSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now)));
       }
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -130,7 +132,7 @@ export class BrewService {
     const now = this.now();
     const actualTotalTimeSeconds = Math.floor(calculateActiveSeconds(brew.startedAt, brew.accumulatedPauseSeconds, Date.parse(now)));
     const updated: Brew = { ...brew, executionStatus: "completed", completedAt: now, currentStageStartedAt: null, actualTotalTimeSeconds, actualTotalWater: null, recordStatus: "saved", feedbackStatus: "awaiting_feedback", analysisStatus: "not_requested", updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -146,7 +148,7 @@ export class BrewService {
     if (rating && rating !== "skipped") return this.setOverallImpression(brewId, rating);
     if (brew.recordStatus === "saved" && rating === undefined) return { ok: true, value: brew };
     const updated: Brew = { ...brew, recordStatus: "saved", feedbackStatus: rating === "skipped" && !brew.flavorFeedback ? "skipped" : brew.feedbackStatus, updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -167,7 +169,7 @@ export class BrewService {
     const now = this.now();
     const feedback: FlavorFeedback = { ...(brew.flavorFeedback ?? { id: this.dependencies.createId?.() ?? createUniqueId(), brewId, flavorNotes: [], createdAt: now }), overallImpression: impression, updatedAt: now };
     const updated: Brew = { ...brew, flavorFeedback: feedback, updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -182,7 +184,7 @@ export class BrewService {
     const now = this.now();
     const feedback: FlavorFeedback = { ...parsed.data, id: brew.flavorFeedback?.id ?? this.dependencies.createId?.() ?? createUniqueId(), brewId: brew.id, createdAt: brew.flavorFeedback?.createdAt ?? now, updatedAt: now };
     const updated: Brew = { ...brew, flavorFeedback: feedback, feedbackStatus: "completed", updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
@@ -195,16 +197,16 @@ export class BrewService {
     if (brew.feedbackStatus === "skipped" && !brew.flavorFeedback) return { ok: false, code: "already_skipped", message: "Flavor feedback is already marked for later.", latest: brew };
     const now = this.now();
     const updated: Brew = { ...brew, feedbackStatus: "skipped", updatedAt: now };
-    const written = this.repository.updateDraft(updated);
+    const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
   getBrewRecordDetails(brewId:string): {ok:true;value:Brew["recordDetails"];brew:Brew}|{ok:false;code:"brew_not_found"|"persistence_failed";message:string} { const read=this.repository.getById(brewId); if(!read.ok&&!read.value)return {ok:false,code:"persistence_failed",message:read.message}; if(!read.value)return {ok:false,code:"brew_not_found",message:"The Brew no longer exists."}; return {ok:true,value:read.value.recordDetails,brew:read.value}; }
-  upsertBrewRecordDetails(brewId:string,input:BrewRecordDetailsInput):BrewOperationResult { const read=this.repository.getById(brewId); if(!read.ok&&!read.value)return {ok:false,code:"persistence_failed",message:read.message}; const brew=read.value; if(!brew)return {ok:false,code:"brew_not_found",message:"The Brew no longer exists."}; if(brew.executionStatus!=="completed")return {ok:false,code:"invalid_execution_status",message:"Complete the Brew before editing its historical record.",latest:brew}; const parsed=brewRecordDetailsInputSchema.safeParse(input); if(!parsed.success)return {ok:false,code:"invalid_record_details",message:parsed.error.issues[0]?.message??"The Brew details are invalid.",latest:brew}; const normalized=normalizeBrewRecordDetailsInput(parsed.data); const now=this.now(); const recordDetails=normalized?{...normalized,createdAt:brew.recordDetails?.createdAt??now,updatedAt:now}:null; const updated:Brew={...brew,recordDetails,updatedAt:now}; const written=this.repository.updateDraft(updated); return written.ok?{ok:true,value:written.value}:{ok:false,code:"persistence_failed",message:written.message,latest:brew}; }
+  upsertBrewRecordDetails(brewId:string,input:BrewRecordDetailsInput):BrewOperationResult { const read=this.repository.getById(brewId); if(!read.ok&&!read.value)return {ok:false,code:"persistence_failed",message:read.message}; const brew=read.value; if(!brew)return {ok:false,code:"brew_not_found",message:"The Brew no longer exists."}; if(brew.executionStatus!=="completed")return {ok:false,code:"invalid_execution_status",message:"Complete the Brew before editing its historical record.",latest:brew}; const parsed=brewRecordDetailsInputSchema.safeParse(input); if(!parsed.success)return {ok:false,code:"invalid_record_details",message:parsed.error.issues[0]?.message??"The Brew details are invalid.",latest:brew}; const normalized=normalizeBrewRecordDetailsInput(parsed.data); const now=this.now(); const recordDetails=normalized?{...normalized,createdAt:brew.recordDetails?.createdAt??now,updatedAt:now}:null; const updated:Brew={...brew,recordDetails,updatedAt:now}; const written=writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations); return written.ok?{ok:true,value:written.value}:{ok:false,code:"persistence_failed",message:written.message,latest:brew}; }
 
   getBrewAnalysis(brewId:string):{ok:true;brew:Brew}|{ok:false;code:"brew_not_found"|"persistence_failed";message:string}{const read=this.repository.getById(brewId);if(!read.ok&&!read.value)return{ok:false,code:"persistence_failed",message:read.message};if(!read.value)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};return{ok:true,brew:read.value}}
-  async requestBrewAnalysis(brewId:string):Promise<BrewOperationResult>{const read=this.repository.getById(brewId);if(!read.ok&&!read.value)return{ok:false,code:"persistence_failed",message:read.message};const brew=read.value;if(!brew)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};if(brew.executionStatus!=="completed")return{ok:false,code:"invalid_execution_status",message:"Complete the Brew before requesting analysis.",latest:brew};if(brew.analysisStatus==="pending")return{ok:false,code:"analysis_already_pending",message:"Analysis is already in progress.",latest:brew};let input;try{input=buildBrewAnalysisInput(brew)}catch{return{ok:false,code:"invalid_analysis_input",message:"The Brew record could not be prepared for analysis.",latest:brew}}const provider=this.dependencies.analysisProvider??new RuleBasedBrewAnalysisProvider(),requestedAt=this.now(),attemptId=this.dependencies.createId?.()??createUniqueId();const pending:Brew={...brew,analysisStatus:"pending",analysisAttempt:{id:attemptId,requestedAt,completedAt:null,status:"pending",provider:provider.provider,model:provider.model,errorCode:null,errorMessage:null},updatedAt:requestedAt};const pendingWrite=this.repository.updateDraft(pending);if(!pendingWrite.ok)return{ok:false,code:"persistence_failed",message:pendingWrite.message,latest:brew};let result;try{result=await provider.analyze(input)}catch{return this.finishAnalysisFailure(brewId,attemptId,"analysis_provider_failed","The local preview provider could not complete this attempt.")}const parsed=brewAnalysisResultSchema.safeParse(result);if(!parsed.success)return this.finishAnalysisFailure(brewId,attemptId,"invalid_analysis_result","The preview returned an invalid structured result.");const latest=this.repository.getById(brewId);if(!latest.value)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};const generatedAt=this.now(),quality=assessAnalysisDataQuality(latest.value),analysis={id:this.dependencies.createId?.()??createUniqueId(),brewId,schemaVersion:1 as const,status:"completed" as const,generatedAt,provider:provider.provider,model:provider.model,sourceFingerprint:createAnalysisFingerprint(latest.value),inputSummary:{dataQuality:quality,missingData:quality.missingFields},result:parsed.data};const completed:Brew={...latest.value,analysisStatus:"completed",analysis,analysisAttempt:{id:attemptId,requestedAt,completedAt:generatedAt,status:"completed",provider:provider.provider,model:provider.model,errorCode:null,errorMessage:null},updatedAt:generatedAt};const write=this.repository.updateDraft(completed);return write.ok?{ok:true,value:write.value}:{ok:false,code:"persistence_failed",message:write.message,latest:latest.value}}
-  private finishAnalysisFailure(brewId:string,attemptId:string,code:"analysis_provider_failed"|"invalid_analysis_result",message:string):BrewOperationResult{const latest=this.repository.getById(brewId);if(!latest.value)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};const completedAt=this.now(),previous=latest.value.analysisAttempt;const failed:Brew={...latest.value,analysisStatus:"failed",analysisAttempt:{id:attemptId,requestedAt:previous?.requestedAt??completedAt,completedAt,status:"failed",provider:previous?.provider??"local_mock",model:previous?.model??"rule-based-v1",errorCode:code,errorMessage:message},updatedAt:completedAt};const write=this.repository.updateDraft(failed);return write.ok?{ok:false,code,message,latest:write.value}:{ok:false,code:"persistence_failed",message:write.message,latest:latest.value}}
+  async requestBrewAnalysis(brewId:string):Promise<BrewOperationResult>{const read=this.repository.getById(brewId);if(!read.ok&&!read.value)return{ok:false,code:"persistence_failed",message:read.message};const brew=read.value;if(!brew)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};if(brew.executionStatus!=="completed")return{ok:false,code:"invalid_execution_status",message:"Complete the Brew before requesting analysis.",latest:brew};if(brew.analysisStatus==="pending")return{ok:false,code:"analysis_already_pending",message:"Analysis is already in progress.",latest:brew};let input;try{input=buildBrewAnalysisInput(brew)}catch{return{ok:false,code:"invalid_analysis_input",message:"The Brew record could not be prepared for analysis.",latest:brew}}const provider=this.dependencies.analysisProvider??new RuleBasedBrewAnalysisProvider(),requestedAt=this.now(),attemptId=this.dependencies.createId?.()??createUniqueId();const pending:Brew={...brew,analysisStatus:"pending",analysisAttempt:{id:attemptId,requestedAt,completedAt:null,status:"pending",provider:provider.provider,model:provider.model,errorCode:null,errorMessage:null},updatedAt:requestedAt};const pendingWrite=writeBrewWithPreparationCleanup(this.repository, pending);if(!pendingWrite.ok)return{ok:false,code:"persistence_failed",message:pendingWrite.message,latest:brew};let result;try{result=await provider.analyze(input)}catch{return this.finishAnalysisFailure(brewId,attemptId,"analysis_provider_failed","The local preview provider could not complete this attempt.")}const parsed=brewAnalysisResultSchema.safeParse(result);if(!parsed.success)return this.finishAnalysisFailure(brewId,attemptId,"invalid_analysis_result","The preview returned an invalid structured result.");const latest=this.repository.getById(brewId);if(!latest.value)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};const generatedAt=this.now(),quality=assessAnalysisDataQuality(latest.value),analysis={id:this.dependencies.createId?.()??createUniqueId(),brewId,schemaVersion:1 as const,status:"completed" as const,generatedAt,provider:provider.provider,model:provider.model,sourceFingerprint:createAnalysisFingerprint(latest.value),inputSummary:{dataQuality:quality,missingData:quality.missingFields},result:parsed.data};const completed:Brew={...latest.value,analysisStatus:"completed",analysis,analysisAttempt:{id:attemptId,requestedAt,completedAt:generatedAt,status:"completed",provider:provider.provider,model:provider.model,errorCode:null,errorMessage:null},updatedAt:generatedAt};const write=writeBrewWithPreparationCleanup(this.repository, completed);return write.ok?{ok:true,value:write.value}:{ok:false,code:"persistence_failed",message:write.message,latest:latest.value}}
+  private finishAnalysisFailure(brewId:string,attemptId:string,code:"analysis_provider_failed"|"invalid_analysis_result",message:string):BrewOperationResult{const latest=this.repository.getById(brewId);if(!latest.value)return{ok:false,code:"brew_not_found",message:"The Brew no longer exists."};const completedAt=this.now(),previous=latest.value.analysisAttempt;const failed:Brew={...latest.value,analysisStatus:"failed",analysisAttempt:{id:attemptId,requestedAt:previous?.requestedAt??completedAt,completedAt,status:"failed",provider:previous?.provider??"local_mock",model:previous?.model??"rule-based-v1",errorCode:code,errorMessage:message},updatedAt:completedAt};const write=writeBrewWithPreparationCleanup(this.repository, failed);return write.ok?{ok:false,code,message,latest:write.value}:{ok:false,code:"persistence_failed",message:write.message,latest:latest.value}}
 
   listJournalEntries(): JournalResult { const read = this.repository.listJournalEntries(); return read.ok ? { ok: true, value: read.value, ...(read.notice && { notice: read.notice }) } : { ok: false, code: "persistence_failed", message: read.message, value: read.value }; }
 
