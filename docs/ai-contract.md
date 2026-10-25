@@ -13,3 +13,8 @@ AI is optional and never gates saving. Zod runtime validation and inferred TypeS
 The structured result contains observations, possible impacts, what worked, one primary next-plan change, overall confidence, evidence, unchanged variables, disclaimer, and missing information. Hypotheses require confidence and evidence. Missing values must remain in `missingInformation`; the model must not invent them. Deterministic comparisons and deltas are computed in application code, not delegated to AI. Prefer one primary variable change per next plan.
 
 The Brew-specific preview uses a provider-independent `BrewAnalysisProvider` receiving a validated pure input and returning a validated structured result. The current `RuleBasedBrewAnalysisProvider` is deterministic, runs locally, identifies itself as `local_mock / rule-based-v1`, and makes no network call. A source fingerprint detects later Feedback or Record Detail changes. Real-provider consent, disclosure, server proxy, key strategy, retention, and privacy policy must be designed before any cloud provider is introduced.
+
+
+## REQ-37 supersedes the active Next Try workflow
+
+V1 explicitly applies a single allowlisted recommendation in Quick Prepare, with no Suggested Plan creation or draft/used repair. Evidence/confidence/rationale/fingerprint are copied, never regenerated on projection. Cancellation compares affected fields to recorded applied values and restores their prior values only on equality. Each Brew stores at most one appliedAdjustment. Earlier Plan lifecycle text describes legacy compatibility only, retained until REQ-53. Cloud contracts and the actual-mapper handoff regression move to REQ-37b; this round is local only.

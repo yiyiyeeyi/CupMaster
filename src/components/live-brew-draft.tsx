@@ -6,10 +6,8 @@ import type { Brew, RecipeStep } from "@/domain";
 import { formatDuration } from "@/domain";
 import { BrewService, type BrewDomainErrorCode } from "@/application/brew-service";
 import { BrewInterruptionService } from "@/application/brew-interruption-service";
-import { SuggestedPlanService } from "@/application/suggested-plan-service";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
-import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
 import { BrewBackButton } from "./brew-back-button";
 import { LiveBrewWakeLock } from "./live-brew-wake-lock";
 import { BrewTimers } from "./brew-timers";
@@ -32,7 +30,7 @@ const errorCopy: Partial<Record<BrewDomainErrorCode, string>> = {
 function expectedStart(steps: RecipeStep[], index: number) { return steps.slice(0, index).reduce((total, step) => total + (step.durationSeconds ?? 0), 0); }
 
 export function LiveBrewDraft({ brewId }: { brewId: string }) {
-  const [state, setState] = useState<ViewState>({ status: "loading" }); const [syncWarning,setSyncWarning]=useState<string|null>(null);const actionLock = useRef(false); const [acting, setActing] = useState(false); const router = useRouter();
+  const [state, setState] = useState<ViewState>({ status: "loading" });const actionLock = useRef(false); const [acting, setActing] = useState(false); const router = useRouter();
   const [interruption] = useState(() => new BrewInterruptionService(new LocalBrewRepository(), new LocalLiveBrewRepository()));
   const redirecting = useRef(false);
   const reload = useCallback(() => {
@@ -47,10 +45,7 @@ export function LiveBrewDraft({ brewId }: { brewId: string }) {
     }
     if (result.state === "completed") { router.replace(`/journal/${brewId}`); return; }
     setState({ status: "found", brew: result.brew, overrun: result.state === "overrun" });
-    if (result.brew.sourceSuggestedPlanId && result.brew.startedAt) {
-      const plan = new LocalSuggestedPlanRepository().getById(result.brew.sourceSuggestedPlanId).value;
-      if (!plan || plan.status !== "used" || plan.usedAt !== result.brew.startedAt || plan.resultingBrewId !== brewId) setSyncWarning("Brew started, but the Next Try status could not be synced.");
-    }
+
   }, [brewId, interruption, router]);
   useEffect(() => { const timer = window.setTimeout(reload, 0); return () => window.clearTimeout(timer); }, [reload]);
   const manualActive = state.status === "found" && (state.brew.executionStatus === "in_progress" || state.brew.executionStatus === "paused");
@@ -67,7 +62,6 @@ export function LiveBrewDraft({ brewId }: { brewId: string }) {
   if (state.status === "error") return <main className="state-page"><p role="alert">{state.message}</p><button className="primary-button" onClick={reload} type="button">{guidedBrewCopy.retryProgress}</button></main>;
   if (state.status === "missing") return <main className="state-page"><p className="eyebrow">Brew not found</p><h1>This draft is not available.</h1><p>{state.message ?? "It may have been removed, or this link belongs to another browser."}</p><div className="form-actions"><Link className="primary-button" href="/discover">Back to Discover</Link><Link className="secondary-button" href="/journal">Back to Journal</Link></div></main>;
   const { brew } = state; const snapshot = brew.recipeSnapshot; const steps = [...snapshot.steps].sort((a, b) => a.order - b.order); const current = steps[brew.currentStageOrder]; const allStagesDone = brew.currentStageOrder >= steps.length && steps.length > 0; const previousTarget = brew.currentStageOrder > 0 ? steps[brew.currentStageOrder - 1]?.targetWaterGrams ?? 0 : 0; const targetPour = current ? Math.max(0, current.targetWaterGrams - previousTarget) : null; const startSeconds = current ? expectedStart(steps, brew.currentStageOrder) : 0;
-  const retrySync=()=>{if(actionLock.current)return;actionLock.current=true;setActing(true);const result=new SuggestedPlanService(new LocalBrewRepository(),new LocalSuggestedPlanRepository()).syncSuggestedPlanUsageFromBrew(brew.id);setSyncWarning(result.ok?null:`${result.message} The Brew remains in progress.`);if(result.ok)setState({status:"found",brew,notice:"Next Try status synced."});actionLock.current=false;setActing(false)};
   const completeStage = () => applyAction((service) => {
     const result = service.completeCurrentStage(brew.id, brew.currentStageOrder, true);
     if (result.ok && result.value.executionStatus === "completed") router.replace(`/journal/${brew.id}?justCompleted=1`);
@@ -81,10 +75,9 @@ export function LiveBrewDraft({ brewId }: { brewId: string }) {
     if (result.ok) router.replace(finish ? `/journal/${brew.id}?justCompleted=1` : `/brew/${brew.id}/prepare`);
     else { setState({ ...state, notice: result.message }); actionLock.current = false; }
   };
-  if(brew.sourceType==="suggested_plan"&&brew.suggestedPlanHandoff?.userDecision==="pending")return <main className="state-page"><p className="eyebrow">Next Try needs confirmation</p><h1>Review this adjustment before brewing.</h1><p>{brew.suggestedPlanHandoff.description}</p><p><strong>{String(brew.suggestedPlanHandoff.originalValue)}{brew.suggestedPlanHandoff.unit}</strong> → <strong>{String(brew.suggestedPlanHandoff.suggestedValue)}{brew.suggestedPlanHandoff.unit}</strong></p><Link className="primary-button" href={`/brew/${brew.id}/prepare`}>Review Next Try</Link></main>;
   if (steps.length === 0) return <main className="state-page"><p className="eyebrow">Brew data issue</p><h1>This Brew has no stages.</h1><p>Start is unavailable because the immutable Recipe Snapshot has no guidance steps.</p><div className="form-actions"><Link className="primary-button" href={`/recipes/${brew.sourceRecipeId}`}>Recipe Detail</Link><Link className="secondary-button" href="/discover">Discover</Link></div></main>;
   if (brew.executionStatus === "not_started") return <GuidedBrewV1 brew={brew} />;
-  return <main className="live-page"><div className="live-topbar"><BrewBackButton brewId={brew.id} /><h1>Live Brew</h1><span className="draft-mark">{brew.executionStatus === "in_progress" ? "In progress" : "Draft"}</span></div>{state.notice && <p className="notice" role={state.errorCode ? "alert" : "status"}>{state.notice}</p>}{brew.suggestedPlanHandoff&&brew.suggestedPlanHandoff.userDecision!=="pending"&&<aside className="next-try-live"><strong>Next Try · {brew.suggestedPlanHandoff.userDecision==="accepted"?"Accepted":"Adjusted before brew"}</strong><span>Suggested: {String(brew.suggestedPlanHandoff.suggestedValue)}{brew.suggestedPlanHandoff.unit}</span></aside>}{syncWarning&&<aside className="sync-warning" role="status"><p>{syncWarning} Timer and stages continue normally; do not start again.</p><button className="secondary-button" disabled={acting} onClick={retrySync} type="button">Retry Sync</button></aside>}
+  return <main className="live-page"><div className="live-topbar"><BrewBackButton brewId={brew.id} /><h1>Live Brew</h1><span className="draft-mark">{brew.executionStatus === "in_progress" ? "In progress" : "Draft"}</span></div>{state.notice && <p className="notice" role={state.errorCode ? "alert" : "status"}>{state.notice}</p>}
     <section className="live-metrics"><div><span>Water Temp</span><strong>{snapshot.temperatureCelsius.value}°C</strong></div><div><span>Target Weight</span><strong>{current?.targetWaterGrams ?? snapshot.totalWaterGrams.value}g</strong></div><div><span>Target Time</span><strong>{formatDuration(brew.brewPlan.expectedTotalTime)}</strong></div></section>
     {(brew.executionStatus === "in_progress" || brew.executionStatus === "paused" || brew.executionStatus === "completed") && <BrewTimers accumulatedPauseSeconds={brew.accumulatedPauseSeconds} currentStagePausedSeconds={brew.currentStagePausedSeconds} pausedAt={brew.pausedAt} completedSeconds={brew.actualTotalTimeSeconds} currentStageStartedAt={brew.currentStageStartedAt} running={brew.executionStatus !== "completed"} startedAt={brew.startedAt} />}
     <section className="live-focus"><p className="eyebrow">{snapshot.title}</p>{allStagesDone ? <div className="all-stages-done" role="status"><strong>所有沖煮階段已完成</strong><p>沖煮結果會自動保存。</p></div> : <><div className="pour-visual" aria-label={`${current?.pattern ?? "guided"} pour pattern preview`}><span>{current?.pattern?.replace("_", " ") ?? "guided pour"}</span></div><strong className="target-weight">{current?.targetWaterGrams ?? 0}g</strong><h2>{current?.title ?? "Stage unavailable"}</h2><p>{current?.instruction ?? "No instruction is available for this stage."}</p><dl className="current-stage-details"><div><dt>Step type</dt><dd>{current?.pattern?.replace("_", " ") ?? "Not specified"}</dd></div><div><dt>Target pour</dt><dd>{targetPour === null ? "—" : `${targetPour}g`}</dd></div><div><dt>Expected start</dt><dd>{formatDuration(startSeconds)}</dd></div><div><dt>Expected duration</dt><dd>{current?.durationSeconds ? formatDuration(current.durationSeconds) : "—"}</dd></div></dl></>}</section>

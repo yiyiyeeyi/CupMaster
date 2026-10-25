@@ -81,3 +81,8 @@ Suggested Plan routes added in the current increment:
 | `/dev/migration-qa` | Development-only Local smoke tools, read-only remote preflight, checkpoint inspection | Cloud 4-3; unavailable in production |
 
 Future nested routes should follow the four slices and App Router conventions. Do not introduce a Pages Router or a second routing tree.
+
+
+## REQ-37 local preparation
+
+`/brew/prepare` reads sourceBrewId/recommendationId/preparationId and shares the Recipe Quick Prepare form. `/brew/[brewId]/prepare` keeps same-cup reset semantics. Converted legacy unstarted IDs redirect from both Brew routes before execution UI mounts. Old Plan/creation/list URLs are compatibility redirects only; normal UI has no Next Try links. See docs/project/req-37-local-preparation.md.

@@ -8,16 +8,13 @@ import { BrewRuntimeController } from "@/application/brew-runtime/brew-runtime-c
 import { GuidedBrewPersistenceService, type GuidedBrewClockAnchor } from "@/application/brew-runtime/guided-brew-persistence";
 import { inspectGuidedBrewForeground } from "@/application/brew-runtime/guided-brew-foreground";
 import { GuidedBrewResourceScope, GuidedBrewV1Session, type GuidedBrewStartSource } from "@/application/brew-runtime/guided-brew-v1-session";
-import { BrewSessionCoordinator } from "@/application/brew-session-coordinator";
 import { BrewService } from "@/application/brew-service";
 import { BrewInterruptionService } from "@/application/brew-interruption-service";
-import { SuggestedPlanService } from "@/application/suggested-plan-service";
 import { createBrewRuntimeRecipeDefinition, type NormalizedRect } from "@/domain/brew-runtime";
 import { CameraCaptureService, FrameAnalysisService, FrameSampler, type CameraCaptureSnapshot } from "@/infrastructure/camera";
 import { isWebVoiceStartSupported, WebGuidanceVoiceAdapter, WebVoiceStartAdapter } from "@/infrastructure/voice";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
-import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
 import { BrewBackButton } from "./brew-back-button";
 import { LiveBrewWakeLock } from "./live-brew-wake-lock";
 import { guidedBrewCopy as copy } from "./guided-brew-copy";
@@ -101,10 +98,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       || (current.mode === "camera" && camera.getSnapshot().state !== "ready")) return;
     startLock.current = true;
     const brews = new LocalBrewRepository();
-    const result = new BrewSessionCoordinator(
-      new BrewService(brews),
-      new SuggestedPlanService(brews, new LocalSuggestedPlanRepository()),
-    ).startBrewSessionWithSuggestedPlanSync(brew.id);
+    const result = new BrewService(brews).startBrewSession(brew.id);
     if (!result.ok) {
       setNotice(result.message);
       startLock.current = false;
@@ -116,7 +110,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       return;
     }
     const timestampMs = executionNow();
-    executionAnchorRef.current = { wallTimeMs: Date.parse(result.brew.startedAt ?? ""), runtimeTimeMs: timestampMs };
+    executionAnchorRef.current = { wallTimeMs: Date.parse(result.value.startedAt ?? ""), runtimeTimeMs: timestampMs };
     const started = session.start(source, timestampMs);
     setVoiceListening(false);
     setNotice(executionSaveErrorRef.current ?? (started

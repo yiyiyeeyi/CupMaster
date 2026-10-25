@@ -1,1 +1,2 @@
-import{SuggestedPlanDetail}from"@/components/suggested-plan-detail";export default async function PlanPage({params}:{params:Promise<{planId:string}>}){return <SuggestedPlanDetail planId={(await params).planId}/>}
+import { LegacyPreparationGate } from "@/components/preparation-migration";
+export default async function Page({ params }: { params: Promise<{ planId: string }> }) { return <LegacyPreparationGate planId={(await params).planId} />; }

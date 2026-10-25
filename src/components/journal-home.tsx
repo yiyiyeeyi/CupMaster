@@ -1,41 +1,33 @@
 "use client";
-
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import type { Brew } from "@/domain";
 import { formatDuration, isAnalysisOutdated } from "@/domain";
-import { JournalLoader, type JournalBrewCardViewModel } from "@/application/journal-loader";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
-import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
-
-import { brewRecordCopy } from "./brew-record-copy";
-type State = { status: "loading" } | { status: "ready"; cards: JournalBrewCardViewModel[]; notice?: string } | { status: "error"; message: string };
+import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
+import { brewRecordCopy as copy } from "./brew-record-copy";
 
 export function JournalHome() {
-  const [state, setState] = useState<State>({ status: "loading" });
-  const [reload, setReload] = useState(0);
-  useEffect(() => { const timer = window.setTimeout(() => { const result = new JournalLoader(new LocalBrewRepository(), new LocalSuggestedPlanRepository()).load(); setState(result.ok ? { status: "ready", cards: result.cards, ...(result.notice && { notice: result.notice }) } : { status: "error", message: result.message }); }, 0); return () => window.clearTimeout(timer); }, [reload]);
-  if (state.status === "loading") return <main className="route-loading"><p className="eyebrow">Journal</p><h1>Loading your cups…</h1></main>;
-  if (state.status === "error") return <main className="state-page"><h1>Your Journal could not be loaded.</h1><p>{state.message}</p><button className="primary-button" onClick={() => { setState({ status: "loading" }); setReload((value) => value + 1); }} type="button">Retry</button></main>;
-  const saved = state.cards.filter(({ brew }) => brew.executionStatus === "completed" && brew.recordStatus === "saved");
-  return <main className="journal-page"><header><p className="eyebrow">Remember</p><h1>Journal</h1><p>{brewRecordCopy.journalDescription}</p></header>{state.notice && <p className="notice">{state.notice}</p>}{state.cards.length === 0 ? <section className="empty-state"><h2>No cups yet.</h2><Link className="primary-button" href="/discover">Choose a recipe</Link></section> : <>{saved.length > 0 && <Section title={brewRecordCopy.completed} cards={saved} />}</>}</main>;
-}
-
-function Section({ title, cards }: { title: string; cards: JournalBrewCardViewModel[] }) {
-  return <section className="journal-section"><div className="section-heading"><h2>{title}</h2><span>{cards.length}</span></div><div className="journal-list">{cards.map((card) => <JournalCard card={card} key={card.brew.id} />)}</div></section>;
-}
-
-function JournalCard({ card }: { card: JournalBrewCardViewModel }) {
-  const { brew, resultContext, sourceNextTry } = card;
-  const href = sourceNextTry.hasSuggestedPlans ? `/journal/${brew.id}` : resultContext.targetRoute;
-  const feedback = brew.flavorFeedback ? `${brew.feedbackStatus === "completed" ? "Feedback added" : brewRecordCopy.feelingRecorded} · ${brewRecordCopy[brew.flavorFeedback.overallImpression]}` : brew.feedbackStatus === "skipped" ? "Skipped" : "Awaiting feedback";
-  const analysis = isAnalysisOutdated(brew) ? "Analysis outdated" : brew.analysisStatus === "completed" ? "Analysis ready" : brew.analysisStatus === "pending" ? "Analysis pending" : brew.analysisStatus === "failed" ? "Analysis failed" : "Analysis not requested";
-  return <Link aria-label={`View brew: ${brew.recipeSnapshot.title}`} className="journal-card" href={href}><div>
-    <span className="status-line">{resultContext.sourceLabel ? `${resultContext.sourceLabel} · ` : ""}{resultContext.statusLabel}{resultContext.handoffLabel ? ` · ${resultContext.handoffLabel}` : ""}</span>
-    <h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? "No bean recorded"} / {brew.recipeSnapshot.title}</h3>
-    {resultContext.adjustmentSummary && <p className="journal-adjustment">{resultContext.adjustmentSummary}</p>}
-    {sourceNextTry.hasSuggestedPlans && <div className="source-next-try-summary"><strong>Next Try available{sourceNextTry.totalPlans > 1 ? ` · ${sourceNextTry.totalPlans} plans` : ""}</strong><span>{sourceNextTry.latestAdjustmentSummary}</span><span>{sourceNextTry.latestExecutionProjection?.label ?? "Status unavailable"}</span></div>}
-    <p>{new Date(brew.completedAt ?? brew.updatedAt).toLocaleString()}</p>
-    {brew.executionStatus === "completed" && <><p>{brew.recordStatus === "saved" ? "Saved" : "Awaiting save"} · {feedback} · {analysis} · {brew.recordDetails ? "Details added" : "Details missing"}</p><dl><div><dt>Time</dt><dd>{brew.actualTotalTimeSeconds == null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</dd></div><div><dt>Dose</dt><dd>{brew.recordDetails?.actualDoseGrams == null ? `${brew.recipeSnapshot.doseGrams.value}g target` : `${brew.recordDetails.actualDoseGrams}g actual`}</dd></div><div><dt>Water</dt><dd>{brew.recordDetails?.actualWaterGrams == null ? `${brew.recipeSnapshot.totalWaterGrams.value}g target` : `${brew.recordDetails.actualWaterGrams}g actual`}</dd></div></dl></>}
-    <strong className="journal-card-action">{sourceNextTry.hasSuggestedPlans ? "View brew and Next Try" : resultContext.actionLabel}</strong>
-  </div><span aria-hidden="true">→</span></Link>;
+  const [brews, setBrews] = useState<Brew[] | null>(null), [error, setError] = useState<string | null>(null), [reload, setReload] = useState(0);
+  useEffect(() => { const timer = window.setTimeout(() => {
+    const migration = new LocalBrewPreparationRepository().migrate();
+    if (!migration.ok) { setError(migration.message); return; }
+    const result = new LocalBrewRepository().listJournalEntries();
+    if (result.ok) { setBrews(result.value); setError(null); } else setError(result.message);
+  }, 0); return () => window.clearTimeout(timer); }, [reload]);
+  if (error) return <main className="state-page"><p role="alert">{error}</p><button type="button" onClick={() => setReload(value => value + 1)}>{copy.retry}</button></main>;
+  if (!brews) return <main className="route-loading"><h1>Journal</h1></main>;
+  return <main className="journal-page"><header><p className="eyebrow">Remember</p><h1>Journal</h1><p>{copy.journalDescription}</p></header>
+    {brews.length === 0 ? <section className="empty-state"><h2>{copy.emptyJournal}</h2><Link className="primary-button" href="/discover">{copy.chooseRecipe}</Link></section> :
+      <section className="journal-section"><div className="section-heading"><h2>{copy.completed}</h2><span>{brews.length}</span></div><div className="journal-list">
+        {brews.map(brew => <Link className="journal-card" href={`/journal/${brew.id}`} key={brew.id}><div>
+          <span className="status-line">{copy.completed}</span><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? "未記錄咖啡豆"} / {brew.recipeSnapshot.title}</h3>
+          {brew.appliedAdjustment ? <p className="journal-adjustment">{copy.appliedSuggestion}：{brew.appliedAdjustment.adjustment.description}</p> : null}
+          <p>{new Date(brew.completedAt ?? brew.updatedAt).toLocaleString()}</p>
+          <p>{brew.flavorFeedback ? `${copy.feelingRecorded} · ${copy[brew.flavorFeedback.overallImpression]}` : brew.feedbackStatus === "skipped" ? "Skipped" : "Awaiting feedback"} · {isAnalysisOutdated(brew) ? "Analysis outdated" : brew.analysisStatus} · {brew.recordDetails ? "Details added" : "Details missing"}</p>
+          <dl><div><dt>Time</dt><dd>{brew.actualTotalTimeSeconds === null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</dd></div><div><dt>Dose</dt><dd>{brew.recordDetails?.actualDoseGrams == null ? `${brew.recipeSnapshot.doseGrams.value}g target` : `${brew.recordDetails.actualDoseGrams}g actual`}</dd></div><div><dt>Water</dt><dd>{brew.recordDetails?.actualWaterGrams == null ? `${brew.recipeSnapshot.totalWaterGrams.value}g target` : `${brew.recordDetails.actualWaterGrams}g actual`}</dd></div></dl>
+          <strong className="journal-card-action">Brew Detail</strong>
+        </div><span aria-hidden="true">→</span></Link>)}
+      </div></section>}
+  </main>;
 }

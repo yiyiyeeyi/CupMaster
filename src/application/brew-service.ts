@@ -36,6 +36,7 @@ export class BrewService {
     if (!read.ok && !read.value) return { ok: false, code: "persistence_failed", message: read.message };
     const brew = read.value;
     if (!brew) return { ok: false, code: "brew_not_found", message: "The Brew draft no longer exists." };
+    if (brew.legacyPreparationId) return { ok: false, code: "invalid_execution_status", message: "舊準備紀錄已轉換，請從新的準備入口開始。", latest: brew };
     if (brew.executionStatus === "in_progress") return { ok: true, value: brew, resumed: true };
     if (brew.executionStatus !== "not_started") return { ok: false, code: "invalid_execution_status", message: `A ${brew.executionStatus} Brew cannot be started in this step.`, latest: brew };
     if(brew.sourceType==="suggested_plan"&&(!brew.suggestedPlanHandoff||brew.suggestedPlanHandoff.userDecision==="pending"||!brew.suggestedPlanHandoff.confirmedAt))return{ok:false,code:"invalid_execution_status",message:"Review and confirm the Suggested Plan before starting this Brew.",latest:brew};
@@ -71,6 +72,7 @@ export class BrewService {
     if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };
     const brew = read.value;
     if (!brew) return { ok: false, code: "brew_not_found", message: "找不到這筆 Brew。" };
+    if (brew.legacyPreparationId) return { ok: false, code: "invalid_execution_status", message: "舊準備紀錄已轉換，請從新的準備入口開始。", latest: brew };
     if (brew.executionStatus === "in_progress") return { ok: true, value: brew, resumed: true };
     const now = this.now();
     const pauseMs = Date.parse(now) - Date.parse(brew.pausedAt ?? "");

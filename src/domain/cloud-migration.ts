@@ -34,12 +34,13 @@ export function transitionMigrationCheckpoint(checkpoint: CloudMigrationCheckpoi
   return cloudMigrationCheckpointSchema.parse(candidate);
 }
 
-export type MigrationGraphErrorCode = "duplicate_brew_id" | "duplicate_plan_id" | "missing_source_brew" | "missing_source_analysis" | "missing_resulting_brew" | "missing_source_plan" | "mapping_mismatch" | "duplicate_resulting_brew" | "invalid_plan_state" | "result_metadata_mismatch" | "cycle_detected";
+export type MigrationGraphErrorCode = "unsupported_local_preparation" | "duplicate_brew_id" | "duplicate_plan_id" | "missing_source_brew" | "missing_source_analysis" | "missing_resulting_brew" | "missing_source_plan" | "mapping_mismatch" | "duplicate_resulting_brew" | "invalid_plan_state" | "result_metadata_mismatch" | "cycle_detected";
 export interface MigrationGraphError { code: MigrationGraphErrorCode; entityId: string; message: string; }
 export interface LocalCloudMigrationGraph { profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
 
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
+  for (const brew of input.brews) if (brew.appliedAdjustment !== undefined || brew.legacyPreparationId) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "新準備資料暫保留本機，請待 REQ-37b；未寫入雲端新表。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);
   for (const plan of input.suggestedPlans) planCounts.set(plan.id, (planCounts.get(plan.id) ?? 0) + 1);

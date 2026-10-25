@@ -7,7 +7,7 @@ import { LocalBrewRepository, LOCAL_BREW_KEY } from "@/repositories/local-brew-r
 class StoragePort {
   raw: string | null = null;
   fail = false;
-  getItem() { return this.raw; }
+  getItem(key: string) { return key === LOCAL_BREW_KEY ? this.raw : null; }
   setItem(_key: string, value: string) { if (this.fail) throw new Error("quota"); this.raw = value; }
 }
 function setup() {

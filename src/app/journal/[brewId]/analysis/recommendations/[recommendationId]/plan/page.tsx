@@ -1,1 +1,2 @@
-import{CreateSuggestedPlan}from"@/components/create-suggested-plan";export default async function CreatePlanPage({params}:{params:Promise<{brewId:string;recommendationId:string}>}){const{brewId,recommendationId}=await params;return <CreateSuggestedPlan brewId={brewId} recommendationId={recommendationId}/>}
+import { redirect } from "next/navigation";
+export default async function Page({ params }: { params: Promise<{ brewId: string; recommendationId: string }> }) { const p = await params; redirect(`/brew/prepare?sourceBrewId=${encodeURIComponent(p.brewId)}&recommendationId=${encodeURIComponent(p.recommendationId)}`); }

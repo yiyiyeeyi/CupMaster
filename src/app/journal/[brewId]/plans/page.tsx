@@ -1,2 +1,2 @@
-import { SourceBrewPlans } from "@/components/source-brew-plans";
-export default async function SourceBrewPlansPage({ params }: { params: Promise<{ brewId: string }> }) { const { brewId } = await params; return <SourceBrewPlans brewId={brewId} />; }
+import { redirect } from "next/navigation";
+export default async function Page({ params }: { params: Promise<{ brewId: string }> }) { redirect(`/journal/${(await params).brewId}`); }

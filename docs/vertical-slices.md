@@ -155,3 +155,7 @@ Cloud 4-3 is QA infrastructure, not a new product slice: deterministic Local smo
   outbox/automatic retry (REQ-27/REQ-5) is still out of scope. The REQ-4 local
   Supabase migration deployment gate remains in force.
 - Detail: docs/project/req-36-auto-save-detail.md.
+
+## REQ-37 local slice
+
+One recommendation per cup; shared Quick Prepare for Recipe, repeat cup and explicit Analysis application. SavedBrewPreparation/AppliedBrewAdjustment are versioned local data, with original legacy backups, hidden unstarted Brew aliases and start guards. Journey 04 owns the pending-list UI, REQ-53 owns legacy deletion, REQ-37b owns cloud schema/mapper/migration v2. No commit/push/deployment in this delivery.
