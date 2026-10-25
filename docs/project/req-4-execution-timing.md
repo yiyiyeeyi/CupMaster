@@ -86,9 +86,8 @@ pending. The exact timing SQL was applied once, unchanged, with no REQ-37b DDL.
 - Cloud history: core `20260804061934`; connector-generated timing version
   `20261025142700`, name `brew_execution_timing`. This maps to local file
   `20261024110000_brew_execution_timing.sql`. The connector assigns its own
-  version; future CLI migration work must reconcile this history mapping before
-  db push, rather than trying to apply the same ALTER TABLE again. History was
-  not manually rewritten in this verification.
+  version. The subsequent authorized history correction below reconciles this
+  mapping; the timing ALTER TABLE must not be applied again.
 - `accumulated_pause_seconds`: numeric, NOT NULL, existing default retained.
   `actual_total_time_seconds`: integer, nullable. `execution_run`: integer,
   nullable. `current_stage_paused_seconds`: numeric, nullable.
@@ -114,6 +113,20 @@ branch push. No main merge, manual deployment, REQ-37b schema or user data retai
 Post-generation checks passed: lint, typecheck, production build and all 56 test
 files / 864 tests (`--maxWorkers=1 --testTimeout=30000`); diff --check passed.
 Final cloud counts remain profiles=1, brews=0, suggested_plans=0, auth.users=1.
+
+### Migration history reconciled (2026-10-25)
+
+Following the user's explicit authorization, SELECT first confirmed the timing
+row had version 20261025142700. A transaction updated only that version/name
+match to 20261024110000, asserting exactly one changed row and no target-version
+collision. No statements, names, other history rows, schema or Brew data changed.
+Both the final SELECT and connector list_migrations confirm exactly two rows:
+
+- 20260804061934 / create_cupmaster_core
+- 20261024110000 / brew_execution_timing
+
+These now match the two repository migration filenames, avoiding a duplicate
+timing migration on future CLI db push. No migration repair or repeated DDL ran.
 
 Final scope correction: remove `skipCurrentStage`, `STAGE_SKIPPED`, the runtime
 skip marker and the widened boolean stage-result contract. Persisted/domain
