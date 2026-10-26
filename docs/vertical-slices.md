@@ -167,3 +167,10 @@ groups in all. A completed/saved Brew consumes its source preparation only after
 the Brew write succeeds; Journal retries failed removal. No new cloud schema,
 picker or navigation redesign. One browser-local notice and one Journal-only
 conversion warning replace repeated notices.
+# REQ-39 / Start
+
+First use opens Discover without Onboarding. Optional PRD-defined preferences
+have their own anonymous contract and override read-only legacy profile data.
+The + seed uses only completed/abandoned cups, and a recipe switch clears lineage
+and preparation consumption linkage. Nickname/Auth bootstrap changes are split
+to the separate REQ-39b plan; no cloud/SQL changes or Live Brew visual redesign.

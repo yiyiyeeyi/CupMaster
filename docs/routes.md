@@ -93,3 +93,12 @@ SavedBrewPreparation entries. The default/unknown filter is all. Preparation car
 open `/brew/prepare?preparationId=…` for confirmation/editing; delete requires
 confirmation. Successful completed-and-saved Brews consume sourcePreparationId;
 Journal retries secondary cleanup without undoing saved Brews. This is local only.
+# REQ-39 / First use
+
+`/` redirects to Discover. `/brew` redirects to `/brew/prepare`; `/onboarding`
+redirects to `/discover?preferences=edit`. Existing query keys and repeated values
+are preserved; returnTo is sanitized to an allowed same-site origin page.
+The four navigation entries are Discover / + / Journal / Me. Brew execution,
+preparation and completion routes, including Journal justCompleted=1, hide it.
+The + entry only seeds from completed/abandoned non-legacy Brews; otherwise it
+uses gentle-start. Recipe switching detaches the old preparation and recommendation.

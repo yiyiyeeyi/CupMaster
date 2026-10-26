@@ -2,7 +2,7 @@
 
 > 這份文件是 repo 內的**產品決策依據**。所有開發者（人或 AI：Codex、Claude）開工前都要讀。
 > 完整 PRD、需求清單與狀態在 Notion；本檔是其中「已定案、會影響實作」的摘要，離線也能查。
-> 最後更新：2026-10-25
+> 最後更新：2026-10-26
 
 ## 1. 依據的優先順序
 
@@ -92,6 +92,8 @@ V1 成功標準：
 
 | 日期 | 決策 | 要點 |
 |---|---|---|
+| 2026-10-26 | REQ-39 首次使用與＋種子 | 根路由直接 Discover；＋只取非 legacy 的 completed／abandoned Brew，createdAt 由新到舊、同時以 id 決勝；只有 not_started 草稿時用 gentle-start。舊路由保留 query，returnTo 需安全檢查；沖煮與完成流程隱藏導覽 |
+| 2026-10-26 | REQ-39 可換配方與偏好界線 | 換配方清除 appliedAdjustment、sourceBrewId、sourcePreparationId 並提示，不消耗原準備；同杯 reset 不換 Snapshot。新偏好優先，需求只用 PRD 選項，舊 UserProfile 唯讀；暱稱與 bootstrap 拆 REQ-39b，本輪不做 |
 | 2026-10-25 | REQ-38 下次想沖於沖完且保存成功後消耗 | 新 Brew 記錄 sourcePreparationId；executionStatus=completed 且 recordStatus=saved 並寫入成功後才移除準備。中途／逾時作廢與返回清除均保留；移除失敗不影響 Brew 保存，Journal 下次載入冪等補做。同一準備多杯並行時第一杯完成即移除，後續完成視為已移除；再次沖同杯從 Brew Detail「再沖一杯」進入 |
 | 2026-10-25 | REQ-38 Journal 暫存與轉換提示 | 暫存改為頂部一行說明紀錄只存在這台裝置的瀏覽器，不逐卡標示；轉換警告只在 Journal 一則，全域轉換靜默執行，僅失敗時提示 |
 | 2026-10-24 | REQ-4 重來保留同一筆 Brew 與 Snapshot | 使用者定案：清除本次執行時間與階段結果，不另建新 Brew；與 Brew Again 建立新杯的流程分開 |

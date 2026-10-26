@@ -16,6 +16,10 @@
 
 底部導覽：**Discover・＋・Journal・Me**（移除 Brew 分頁）。
 
+REQ-39（2026-10-26）：＋只從非 legacy、`executionStatus=completed` 或 `abandoned` 的 Brew 取上一杯，依 `createdAt` 由新到舊，同時以 `id` 決勝；不取未開始草稿。沒有符合杯數時預填現有新手食譜 `gentle-start`。沖煮路由與剛完成流程（`justCompleted=1`）隱藏導覽。舊 `/brew`、`/onboarding`、根路由轉址保留 query，`returnTo` 只允許安全的站內來源頁。
+
+換配方清除舊建議、來源 Brew 與 `sourcePreparationId`，並提示本次完成不消耗原準備。舊 UserProfile 只讀，新偏好優先；暱稱移至登入／註冊及 bootstrap 修正另由 REQ-39b 交付，本輪不修改。
+
 | 頁面 | 從哪裡進來 | 主要動作 | 返回會到 |
 |---|---|---|---|
 | Discover | 打開、底部導覽 | 挑食譜。第一次使用時新手推薦（例如 4:6 沖煮法）置頂；「告訴我們你的程度」為選填卡片，只影響推薦順序 | 第一層 |
