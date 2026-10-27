@@ -109,11 +109,11 @@ Claude 已直接改（未 commit，在工作區，請驗證後併入下一個 co
 
 ## 下一批修正項（批次 2 開頭先做，依序）
 
-- [ ] **P1 雲端遷移會悄悄丟資料**：`src/domain/cloud-migration.ts` 的 preflight 只擋 appliedAdjustment／legacyPreparationId／sourcePreparationId。批次 1 新增的本機欄位（RecipeStep／BrewStage.pourMethod、snapshot／plan 的 brewTemperatureMode、iceGrams、equipment.grinderSetting、equipment.accessories、plan.equipment）雲端 mapper 都還沒有，現在登入做 migration 會把這些欄位直接丟掉。在 REQ-37b 之前，preflight 遇到任一欄位有值就同樣擋下並說明「保留本機」。補測試：每個欄位各一筆。
-- [ ] **P1 build 設定**：package.json 的 `next build` 在 Next 16 預設用 Turbopack，你本機會卡住，目前只用 `--webpack` 驗證過。查清楚是本機記憶體問題還是專案問題；部署環境若也用預設 build，要嘛確認 Turbopack 在那裡能過，要嘛把 build script 固定成 `next build --webpack`。結論寫進 handoff。
+- [x] **P1 雲端遷移會悄悄丟資料**：`src/domain/cloud-migration.ts` 的 preflight 只擋 appliedAdjustment／legacyPreparationId／sourcePreparationId。批次 1 新增的本機欄位（RecipeStep／BrewStage.pourMethod、snapshot／plan 的 brewTemperatureMode、iceGrams、equipment.grinderSetting、equipment.accessories、plan.equipment）雲端 mapper 都還沒有，現在登入做 migration 會把這些欄位直接丟掉。在 REQ-37b 之前，preflight 遇到任一欄位有值就同樣擋下並說明「保留本機」。補測試：每個欄位各一筆。（a6ae312；研磨由 A 承接）
+- [x] **P1 build 設定**：package.json 的 `next build` 在 Next 16 預設用 Turbopack，你本機會卡住，目前只用 `--webpack` 驗證過。查清楚是本機記憶體問題還是專案問題；部署環境若也用預設 build，要嘛確認 Turbopack 在那裡能過，要嘛把 build script 固定成 `next build --webpack`。結論寫進 handoff。（a6ae312；研磨由 A 承接）
 - [ ] **P2 研磨有兩個真實來源**：`snapshot.grindDescription`（user_override）與 `equipment.grinderSetting` 同時存格數，換配方時已經在手動同步。定一個為準（建議 equipment.grinder＋grinderSetting），grindDescription 只由它推導；加測試保證兩者不會分歧。
-- [ ] **P2 步驟有兩個注水欄位**：舊 `pattern`（center／spiral／pulse／continuous／immersion）和新 `pourMethod`（七種）重疊。寫一個明確的對應或標記 pattern 為 deprecated，REQ-37b 只同步一個。
-- [ ] **P2 Notion REQ-37b**：把上面所有新本機欄位，以及 profiles.preferences 的 displayNameConfirmed／experienceLevelSource，補進 REQ-37b 的 mapper 清單。
+- [x] **P2 步驟有兩個注水欄位**：舊 `pattern`（center／spiral／pulse／continuous／immersion）和新 `pourMethod`（七種）重疊。寫一個明確的對應或標記 pattern 為 deprecated，REQ-37b 只同步一個。（a6ae312；研磨由 A 承接）
+- [x] **P2 Notion REQ-37b**：把上面所有新本機欄位，以及 profiles.preferences 的 displayNameConfirmed／experienceLevelSource，補進 REQ-37b 的 mapper 清單。（a6ae312；研磨由 A 承接）
 - （REQ-54 已記）新偏好資料損毀時需提供「重設偏好」路徑。
 
 ## 批次 2（yiyi 2026-10-27 決定：Collection＋豆子詳情頁；磨豆機刻度改三種格式）

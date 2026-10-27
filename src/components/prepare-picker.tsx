@@ -31,7 +31,7 @@ export function PreparePicker({ label, value, options, onChange, searchable = fa
     </div>}
   </div>;
 }
-function PickerWheel({label,options,selected,multiple,onChange}:{label:string;options:PickerOption[];selected:string[];multiple:boolean;onChange(value:string):void}){
+export function PickerWheel({label,options,selected,multiple,onChange}:{label:string;options:PickerOption[];selected:string[];multiple:boolean;onChange(value:string):void}){
   const wheel=useRef<HTMLDivElement>(null), scroller=useRef<ReturnType<typeof setTimeout>|null>(null);
   const initial=useRef(Math.max(0,options.findIndex(option=>selected.includes(option.value))));
   useEffect(()=>{if(wheel.current)wheel.current.scrollTop=initial.current*44;return()=>{if(scroller.current)clearTimeout(scroller.current);};},[]);

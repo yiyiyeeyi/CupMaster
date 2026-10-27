@@ -19,6 +19,9 @@ describe("cloud migration checkpoint", () => {
 
 describe("migration graph validation", () => {
   it.each([
+    ["structured snapshot", (b:Brew)=>{b.recipeSnapshot.grind={grinderId:"timemore-c3",format:"single",value:18};}],
+    ["structured plan", (b:Brew)=>{b.brewPlan.grind={grinderId:"custom:mine",format:"number",value:2.5};}],
+    ["grinder ID", (b:Brew)=>{b.recipeSnapshot.equipment={dripper:"V60",grinderId:"timemore-c3"};}],
     ["snapshot mode", (b:Brew)=>{b.recipeSnapshot.brewTemperatureMode="hot";}],
     ["snapshot ice", (b:Brew)=>{b.recipeSnapshot.iceGrams=100;}],
     ["plan mode", (b:Brew)=>{b.brewPlan.brewTemperatureMode="iced";}],

@@ -41,7 +41,7 @@ export interface LocalCloudMigrationGraph { profile: unknown | null; brews: read
 /** Fail closed until REQ-37b can preserve every optional local field. */
 export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
   const snapshot=brew.recipeSnapshot, plan=brew.brewPlan;
-  return brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
+  return snapshot.grind !== undefined || plan.grind !== undefined || snapshot.equipment?.grinderId !== undefined || brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
     || snapshot.brewTemperatureMode !== undefined || snapshot.iceGrams !== undefined
     || plan.brewTemperatureMode !== undefined || plan.iceGrams !== undefined || plan.equipment !== undefined
     || snapshot.equipment?.grinderSetting !== undefined || snapshot.equipment?.accessories !== undefined

@@ -6,7 +6,8 @@ import { synchronizePreparation } from "@/domain/brew-preparation";
 import { changePrepareAmount, isRatioChanged, restorePrepareAmounts } from "@/domain/prepare-amounts";
 import { applyPrepareAmounts } from "@/domain/prepare-amount-application";
 import { pourMethodSchema } from "@/domain/schemas";
-import { changeGrinder, grindMicrons } from "@/domain/prepare-grind";
+import { grinders, grinderDefinition, switchGrinderSetting } from "@/domain/grinders";
+import { GrinderSettingPicker } from "./grinder-setting-picker";
 import { brewSheetCopy } from "./brew-sheet-copy";
 import { prepareCopy as copy } from "./prepare-copy";
 import { PrepareGearPicker } from "./prepare-gear-picker";
@@ -14,7 +15,7 @@ import { PreparePicker, type PickerOption } from "./prepare-picker";
 import "./quick-prepare-v17.css";
 
 const numbers=(min:number,max:number,step=1):PickerOption[]=>Array.from({length:Math.floor((max-min)/step)+1},(_,index)=>{const value=String(Number((min+index*step).toFixed(2)));return{value,label:value};});
-const doses=numbers(1,100,.5),waters=numbers(10,2000,5),temperatures=numbers(60,100),settings=numbers(0,200,.5),iceValues=numbers(5,1000,5);
+const doses=numbers(1,100,.5),waters=numbers(10,2000,5),temperatures=numbers(60,100),iceValues=numbers(5,1000,5);
 const unique=(values:string[])=>[...new Set(values.filter(Boolean))].map(value=>({value,label:value}));
 const withCurrent=(options:PickerOption[],value:string)=>options.some(option=>option.value===value)||!value?options:[...options,{value,label:value}].sort((a,b)=>Number(a.value)-Number(b.value));
 const noop=()=>{};
@@ -23,6 +24,7 @@ function Pin({label,checked,onChange}:{label:string;checked:boolean;onChange():v
 }
 export function PreparationControls({seed,onChange,recipes,onRecipe}:{seed:PreparationSeed;onChange(seed:PreparationSeed):void;recipes:Recipe[];onRecipe(recipe:Recipe):void}){
   const [doseFixed,setDoseFixed]=useState(false),[waterFixed,setWaterFixed]=useState(false),[grinderFixed,setGrinderFixed]=useState(false),[settingFixed,setSettingFixed]=useState(false);
+  const [settingNotice,setSettingNotice]=useState<string|null>(null);
   const [more,setMore]=useState(false),[customGrinders,setCustomGrinders]=useState<string[]>([]),[customDrippers,setCustomDrippers]=useState<string[]>([]),[customAccessories,setCustomAccessories]=useState<string[]>([]);
   const s=seed.snapshot, gear=s.equipment;
   function patch(change:(snapshot:BrewRecipeSnapshot)=>void){const next=structuredClone(seed);change(next.snapshot);onChange({...next,...synchronizePreparation(next)});}
@@ -32,9 +34,14 @@ export function PreparationControls({seed,onChange,recipes,onRecipe}:{seed:Prepa
   const ratio=(dose:number,water:number)=>`1:${Number((water/dose).toFixed(2))}`;
   function amount(field:"dose"|"water",value:string){onChange(applyPrepareAmounts(seed,changePrepareAmount(amounts,field,Number(value))));}
   function equipment(snapshot:BrewRecipeSnapshot){return snapshot.equipment ??= {dripper:snapshot.dripper.value};}
-  function grinder(value:string){const next=changeGrinder({grinder:gear?.grinder,setting:gear?.grinderSetting},value,settingFixed);patch(snapshot=>{const g=equipment(snapshot);g.grinder=next.grinder;if(next.setting!==undefined){g.grinderSetting=next.setting;snapshot.grindDescription={value:next.setting,recipeDefault:snapshot.grindDescription?.recipeDefault ?? "",source:"user_override"};}});}
-  const microns=grindMicrons({grinder:gear?.grinder,setting:gear?.grinderSetting});
-  const grinderOptions=unique([gear?.grinder ?? "",...customGrinders]);
+  const definition=grinderDefinition(gear?.grinderId ?? gear?.grinder ?? "custom:unspecified",gear?.grinder ?? "自訂磨豆機");
+  function grinder(value:string){const selected=grinderDefinition(value);patch(snapshot=>{
+    const g=equipment(snapshot);g.grinder=selected.name;g.grinderId=selected.id;
+    const candidate=switchGrinderSetting(snapshot.grind,selected.id);
+    if(definition.format!==selected.format || (snapshot.grind!==undefined && candidate===undefined)){delete snapshot.grind;delete g.grinderSetting;if(snapshot.grindDescription)snapshot.grindDescription.value="";setSettingNotice("刻度格式不同，請重新設定");}
+    else if(candidate)snapshot.grind=candidate;
+  });}
+  const grinderOptions=unique([...grinders.map(g=>g.name),gear?.grinder ?? "",...customGrinders]);
   const dripperOptions=unique([s.dripper.value,...recipes.map(recipe=>recipe.currentVersion.dripper),...customDrippers]);
   const accessoryOptions=unique([...(gear?.accessories ?? []),...customAccessories]);
   function accessory(value:string){patch(snapshot=>{const g=equipment(snapshot),previous=g.accessories ?? [];g.accessories=previous.includes(value)?previous.filter(item=>item!==value):[...previous,value];});}
@@ -47,9 +54,10 @@ export function PreparationControls({seed,onChange,recipes,onRecipe}:{seed:Prepa
       <div className="prepare-value-row"><span>{copy.water}</span><PreparePicker label={copy.water} value={String(s.totalWaterGrams.value)} options={withCurrent(waters,String(s.totalWaterGrams.value))} onChange={value=>amount("water",value)} onClose={noop}><strong className={s.totalWaterGrams.value!==defaults.water?"modified":""}>{s.totalWaterGrams.value}<small>g</small></strong></PreparePicker><Pin label={copy.fixedWater} checked={waterFixed} onChange={()=>setWaterFixed(!waterFixed)}/></div>
     </section>
     <section className="prepare-group prepare-single"><h2>{copy.temperature}</h2><PreparePicker label={copy.temperature} value={String(s.temperatureCelsius.value)} options={temperatures} onClose={noop} onChange={value=>patch(snapshot=>{snapshot.temperatureCelsius.value=Number(value);snapshot.temperatureCelsius.source="user_override";})}><strong>{s.temperatureCelsius.value}<small>°C</small></strong></PreparePicker></section>
-    <section className="prepare-group"><header><h2>{copy.grind}</h2>{microns!==undefined && <small>{copy.micron} {microns} μm</small>}</header>
+    <section className="prepare-group"><header><h2>{copy.grind}</h2></header>
       <div className="prepare-value-row"><span>{copy.grinder}</span><PreparePicker label={copy.grinder} value={gear?.grinder ?? ""} options={grinderOptions} searchable addLabel={copy.addGrinder} onAdd={value=>{setCustomGrinders(previous=>[...previous,value]);grinder(value);}} onChange={grinder} onClose={noop}/><Pin label={copy.fixedGrinder} checked={grinderFixed} onChange={()=>setGrinderFixed(!grinderFixed)}/></div>
-      <div className="prepare-value-row"><span>{copy.setting}</span><PreparePicker label={copy.setting} value={gear?.grinderSetting ?? ""} options={withCurrent(settings,gear?.grinderSetting ?? "")} onClose={noop} onChange={value=>patch(snapshot=>{equipment(snapshot).grinderSetting=value;snapshot.grindDescription={value,recipeDefault:snapshot.grindDescription?.recipeDefault ?? "",source:"user_override"};})}/><Pin label={copy.fixedSetting} checked={settingFixed} onChange={()=>setSettingFixed(!settingFixed)}/></div>
+      <div className="prepare-value-row"><span>{copy.setting}</span><GrinderSettingPicker key={definition.id} definition={definition} value={s.grind} legacy={gear?.grinderSetting} onChange={value=>patch(snapshot=>{snapshot.grind=value;if(!value){delete equipment(snapshot).grinderSetting;if(snapshot.grindDescription)snapshot.grindDescription.value="";}setSettingNotice(null);})}/><Pin label={copy.fixedSetting} checked={settingFixed} onChange={()=>setSettingFixed(!settingFixed)}/></div>
+      {settingNotice && <p className="notice" role="status">{settingNotice}</p>}
       {!gear?.grinderSetting && s.grindDescription?.value && <p className="prepare-original-grind">{s.grindDescription.value}</p>}
     </section>
     <section className="prepare-group prepare-single"><h2>{copy.gear}</h2><PrepareGearPicker dripper={s.dripper.value} accessories={gear?.accessories ?? []} drippers={dripperOptions} accessoryOptions={accessoryOptions} onDripper={value=>patch(snapshot=>{snapshot.dripper.value=value;snapshot.dripper.source=value===snapshot.dripper.recipeDefault?"recipe_default":"user_override";equipment(snapshot).dripper=value;})} onAccessory={accessory} onAddDripper={value=>{setCustomDrippers(previous=>[...previous,value]);patch(snapshot=>{snapshot.dripper.value=value;snapshot.dripper.source="user_override";equipment(snapshot).dripper=value;});}} onAddAccessory={value=>{setCustomAccessories(previous=>[...previous,value]);accessory(value);}} /></section>

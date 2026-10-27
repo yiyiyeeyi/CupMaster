@@ -13,6 +13,7 @@ export function preparationFromRecipe(recipe: Recipe): PreparationSeed {
 }
 export function switchPreparationRecipe(seed: PreparationSeed, recipe: Recipe): PreparationSeed {
   const next = preparationFromRecipe(recipe);
+  if (seed.snapshot.grind) next.snapshot.grind=structuredClone(seed.snapshot.grind);
   if (seed.snapshot.bean) next.snapshot.bean = structuredClone(seed.snapshot.bean);
   if (seed.snapshot.equipment) next.snapshot.equipment = { ...structuredClone(seed.snapshot.equipment), dripper: next.snapshot.dripper.value };
   if (seed.snapshot.equipment?.grinderSetting) next.snapshot.grindDescription = { value:seed.snapshot.equipment.grinderSetting, recipeDefault:next.snapshot.grindDescription?.recipeDefault ?? "", source:"user_override" };

@@ -1,3 +1,4 @@
+import type { GrindSetting } from "./grinders";
 import type { AppliedBrewAdjustment } from "./brew-preparation";
 import type { BrewAnalysis, BrewAnalysisAttempt } from "./brew-analysis";
 
@@ -37,12 +38,13 @@ export interface RecipeVersion { id: Id; recipeId: Id; version: number; title: s
 export interface Recipe { id: Id; type: RecipeType; currentVersion: RecipeVersion; parentRecipeId?: Id; publishedAt?: ISODateTime; }
 
 export interface QuickPrepareInput { recipeVersionId: Id; coffeeDose: number; waterTotal: number; waterTemperature: number; dripper: string; grindSetting?: string; beanName?: string; equipmentNotes?: string; userGoal?: string; }
-export interface PreparationGear { grinder?: string; grinderSetting?: string; accessories?: string[]; }
-export interface BrewPlan { equipment?: PreparationGear; brewTemperatureMode?: "hot" | "iced"; iceGrams?: number; id: Id; sourceRecipeId: Id; sourceRecipeVersion: number; recipeTitle: string; method: Method; coffeeDose: ResolvedParameter<number>; waterTotal: ResolvedParameter<number>; waterTemperature: ResolvedParameter<number>; ratio: number; dripper: ResolvedParameter<string>; grindSetting?: ResolvedParameter<string>; beanMetadata?: { name: string }; equipmentNotes?: string; userGoal?: string; expectedTotalTime: number; stages: BrewStage[]; createdAt: ISODateTime; }
+export interface PreparationGear { grinderId?: string; grinder?: string; grinderSetting?: string; accessories?: string[]; }
+export interface BrewPlan { grind?: GrindSetting; equipment?: PreparationGear; brewTemperatureMode?: "hot" | "iced"; iceGrams?: number; id: Id; sourceRecipeId: Id; sourceRecipeVersion: number; recipeTitle: string; method: Method; coffeeDose: ResolvedParameter<number>; waterTotal: ResolvedParameter<number>; waterTemperature: ResolvedParameter<number>; ratio: number; dripper: ResolvedParameter<string>; grindSetting?: ResolvedParameter<string>; beanMetadata?: { name: string }; equipmentNotes?: string; userGoal?: string; expectedTotalTime: number; stages: BrewStage[]; createdAt: ISODateTime; }
 export interface BrewStage { pourMethod?: PourMethod; id: Id; order: number; title: string; targetWaterGrams: number; targetDurationSeconds?: number; pattern?: RecipeStep["pattern"]; instruction: string; guidance?: RecipeStepGuidance; }
 export interface BrewStageResult { stageOrder: number; stageId: Id; actualStartedAt: ISODateTime; actualCompletedAt: ISODateTime; actualDurationSeconds: number; actualWeight: null; weightDifference: null; wasSkipped: false; }
 
 export interface BrewRecipeSnapshot {
+  grind?: GrindSetting;
   brewTemperatureMode?: "hot" | "iced";
   iceGrams?: number;
   sourceRecipeId?: Id;

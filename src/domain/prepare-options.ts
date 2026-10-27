@@ -8,6 +8,6 @@ export const prepareExtrasSchema = z.object(prepareExtrasShape).superRefine((val
   if (value.brewTemperatureMode !== "iced" && value.iceGrams !== undefined) context.addIssue({code:"custom",path:["iceGrams"],message:"只有冰沖可記錄冰塊。"});
 });
 export const preparationGearSchema = z.object({
-  grinder:z.string().trim().max(100).optional(), grinderSetting:z.string().trim().max(80).optional(),
+  grinderId:z.string().max(180).optional(), grinder:z.string().trim().max(100).optional(), grinderSetting:z.string().trim().max(80).optional(),
   accessories:z.array(z.string().trim().min(1).max(80)).max(20).optional(),
 });

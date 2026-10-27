@@ -27,6 +27,7 @@ export class LocalBrewPreparationRepository {
     } catch { return { ok: false as const, message: "無法保存準備紀錄，請確認儲存空間後重試。" }; }
   }
   save(seed: BrewPreparation, id: string, at: string) {
+    seed = synchronizePreparation(seed);
     if (!isValidPreparation(seed)) return { ok: false as const, message: "請檢查沖煮參數與階段秒數。" };
     const read = this.read(); if (!read.ok) return read;
     if (read.value.deletedIds.includes(id)) return { ok: false as const, message: "這份準備紀錄已刪除，請返回 Journal。" };
