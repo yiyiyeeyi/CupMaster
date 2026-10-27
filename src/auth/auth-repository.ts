@@ -6,7 +6,7 @@ export interface AuthRepository {
   getSession(): Promise<AuthResult<Session | null>>;
   getUser(): Promise<AuthResult<User | null>>;
   signInWithEmail(credentials: AuthCredentials): Promise<AuthResult<Session>>;
-  signUpWithEmail(credentials: AuthCredentials): Promise<AuthResult<SignUpOutcome>>;
+  signUpWithEmail(credentials: AuthCredentials & { displayName?: string }): Promise<AuthResult<SignUpOutcome>>;
   resendSignupConfirmation(email: string): Promise<AuthResult<null>>;
   signOut(): Promise<AuthResult<null>>;
   refreshSession(): Promise<AuthResult<Session | null>>;

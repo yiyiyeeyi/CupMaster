@@ -42,6 +42,8 @@ export async function createAuthenticatedRemoteRepositoryBundle(getClient: Clien
 export async function createMigrationRepositoryBundle(getClient: ClientFactory = getSupabaseBrowserClient): Promise<MigrationBundleResult> {
   const remote = await createAuthenticatedRemoteRepositoryBundle(getClient);
   if (!remote.ok) return remote;
+  const profile = await remote.value.userProfileRepository.load();
+  if (!profile.ok || !profile.value) return { ok: false, code: "migration_unavailable", message: "請先確認暱稱；紀錄仍保存在這個瀏覽器。" };
   return { ok: true, value: { local: createLocalRepositoryBundle(), remote: remote.value, authenticatedUserId: remote.authenticatedUserId } };
 }
 

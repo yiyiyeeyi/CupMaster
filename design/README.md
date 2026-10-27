@@ -1,5 +1,8 @@
 # CupMaster Design Source of Truth
 
+> **2026-10-26 新版：** 最新定稿的 UI 在 `design/new/`（含畫面、互動邏輯、視覺規範）。
+> 同一頁面以 `design/new/` 為準；那裡沒有的頁面才看下方 01–19 舊圖。
+
 This folder contains the official UI designs for CupMaster.
 
 All future frontend development MUST follow these designs.

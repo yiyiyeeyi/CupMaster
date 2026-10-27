@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>豆袋收藏</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&amp;family=Noto+Serif+TC:wght@400;500&amp;family=Noto+Sans+TC:wght@300;400;500&amp;family=Inter:wght@300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#211a16}a:hover{color:#8a3f24}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #faf8f4; color: #211a16; font-family: Inter, 'Noto Sans TC', system-ui, sans-serif; font-variant-numeric: lining-nums tabular-nums; font-weight: 300">
+
+  <div style="padding: 54px 24px 0; display: flex; justify-content: space-between; align-items: flex-end">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 10px; letter-spacing: .24em; color: #8f8177">COLLECTION</span>
+      <h1 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: 40px; line-height: 1">Collection</h1>
+    </div>
+    <span style="font-size: 11px; color: #8f8177; padding-bottom: 6px">6 包豆子</span>
+  </div>
+  <div style="margin: 16px 24px 0; display: flex; gap: 18px; font-size: 13px; border-top: .5px solid #211a16; padding-top: 12px">
+    <span style="font-weight: 500; border-bottom: 1px solid #211a16; padding-bottom: 4px">豆子</span>
+    <span style="color: #8f8177">配方</span>
+    <span style="color: #8f8177">方案</span>
+    <span style="color: #8f8177">收藏</span>
+  </div>
+
+  <div style="margin: 16px 16px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+    <sc-for list="{{bags}}" as="b" hint-placeholder-count="5">
+      <a href="#" style="display: flex; flex-direction: column; text-decoration: none">
+        <div style="height: 150px; background: #f1ede6; display: flex; align-items: center; justify-content: center">
+          <svg width="74" height="96" viewBox="0 0 40 52" role="img" aria-label="{{b.name}} 豆袋去背圖">
+            <path d="M7 8 L33 8 L35 50 L5 50 Z" fill="{{b.color}}"></path>
+            <rect x="7" y="4" width="26" height="5" fill="{{b.color}}" opacity=".85"></rect>
+            <rect x="12" y="22" width="16" height="13" fill="#faf8f4" opacity=".92"></rect>
+            <line x1="14" y1="26" x2="26" y2="26" stroke="{{b.color}}" stroke-width=".8"></line>
+            <line x1="14" y1="30" x2="22" y2="30" stroke="{{b.color}}" stroke-width=".8"></line>
+          </svg>
+        </div>
+        <span style="font-family: 'Noto Serif TC', serif; font-weight: 400; font-size: 14px; margin-top: 8px">{{b.name}}</span>
+        <span style="font-size: 11px; color: #8f8177; margin-top: 2px">{{b.meta}}</span>
+      </a>
+    </sc-for>
+    <a href="#" style="display: flex; flex-direction: column; text-decoration: none">
+      <div style="height: 150px; border: .8px dashed #cfc6b8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #6f6259">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M4 8h3l2-2h6l2 2h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+        <span style="font-size: 12px">拍一包新豆</span>
+      </div>
+      <span style="font-size: 11px; color: #8f8177; margin-top: 8px">自動去背，並讀出產區與處理法</span>
+    </a>
+  </div>
+  <nav aria-label="主要導覽" style="position: absolute; left: 0; right: 0; bottom: 0; height: 84px; background: #faf8f4; border-top: .5px solid #e3ddd3; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: 16px; box-sizing: border-box"><a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8f8177; font-weight: 300; text-decoration: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4 4"></path></svg>Discover</a><a href="#" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #211a16; font-weight: 500; text-decoration: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"></path></svg>Collection</a><a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #211a16; font-weight: 300; text-decoration: none"><span style="width: 40px; height: 40px; border-radius: 50%; background: #211a16; color: #faf8f4; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M5 6h14l-5 7h-4z"></path><path d="M9 16h6l-1 4h-4z"></path></svg></span>Brew</a><a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8f8177; font-weight: 300; text-decoration: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M6 4h12v16H6z"></path><path d="M9 8h6M9 12h6M9 16h3"></path></svg>Journal</a><a href="#" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: #8f8177; font-weight: 300; text-decoration: none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="9" r="3.5"></circle><path d="M5 20c1.5-4 12.5-4 14 0"></path></svg>Me</a></nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const bags = [
+      { name: '哥倫比亞 粉紅波旁', meta: '沖過 4 次 · 最佳 4/5', color: '#c4704f' },
+      { name: '衣索比亞 古吉 花蝶', meta: '沖過 2 次 · 最佳 5/5', color: '#d8c19b' },
+      { name: '肯亞 涅里 AA', meta: '沖過 3 次 · 最佳 4/5', color: '#3f5a4a' },
+      { name: '瓜地馬拉 薇薇特南果', meta: '沖過 1 次 · 4/5', color: '#2f4d6e' },
+      { name: '巴拿馬 瑰夏', meta: '還沒沖過', color: '#b9a48a' }
+    ];
+    return { bags };
+  }
+}
+</script>
+</body>
+</html>

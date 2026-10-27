@@ -25,6 +25,26 @@ class FakeAuthRepository implements AuthRepository {
 }
 function observe(controller: AuthSessionController) { let latest: AuthState = { status: "loading", user: null, session: null, error: null, notice: null, profileBootstrap: "idle" }; const unsubscribe = controller.subscribe((state) => { latest = state; }); return { latest: () => latest, unsubscribe }; }
 describe("Cloud 2 auth", () => {
+  it("keeps missing-profile sessions usable without repeated bootstrap", async () => {
+    const repo = new FakeAuthRepository(); let count = 0;
+    const controller = new AuthSessionController(() => repo, async () => { count++; return { ok: true, value: null }; });
+    const observed = observe(controller);
+    await controller.setSession(session);
+    expect(observed.latest()).toMatchObject({ status: "authenticated", profileBootstrap: "missing" });
+    expect(count).toBe(1);
+  });
+  it("ignores bootstrap completion after switching accounts", async () => {
+    let release: (result: { ok: boolean }) => void = () => {};
+    const pending = new Promise<{ ok: boolean }>(resolve => { release = resolve; });
+    let count = 0;
+    const controller = new AuthSessionController(() => new FakeAuthRepository(), () => ++count === 1 ? pending : Promise.resolve({ ok: true }));
+    const observed = observe(controller);
+    const first = controller.setSession(session);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await controller.setSession({ ...session, user: { ...user, id: "user-2" } });
+    release({ ok: false }); await first;
+    expect(observed.latest()).toMatchObject({ user: { id: "user-2" }, profileBootstrap: "ready" });
+  });
   it("starts loading", () => { const repo = new FakeAuthRepository(); expect(observe(new AuthSessionController(() => repo)).latest().status).toBe("loading"); });
   it("no session becomes local", async () => { const repo = new FakeAuthRepository(); const c = new AuthSessionController(() => repo); const o = observe(c); await c.start(); expect(o.latest().status).toBe("local"); });
   it("session becomes authenticated", async () => { const repo = new FakeAuthRepository(); repo.session = session; const c = new AuthSessionController(() => repo); const o = observe(c); await c.start(); expect(o.latest().status).toBe("authenticated"); });

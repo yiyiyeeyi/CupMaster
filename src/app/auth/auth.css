@@ -1,0 +1,13 @@
+.auth-page { max-width:390px; padding:50px 24px 120px; margin:auto; min-height:100svh; }
+.auth-page h1 { font-family:var(--display); font-size:40px; font-weight:400; }
+.auth-page .auth-mode { display:flex; border-bottom:.5px solid var(--rule); gap:28px; }
+.auth-page .auth-mode button { background:none; border:0; min-height:44px; color:var(--mute); padding:0 4px; }
+.auth-page .auth-mode button[aria-pressed="true"] { color:var(--ink); border-bottom:1px solid var(--ink); }
+.auth-page .auth-form { display:grid; gap:24px; margin:32px 0 24px; }
+.auth-page .auth-form label { display:grid; gap:8px; font-size:12px; }
+.auth-page .auth-form input { width:100%; min-width:0; border:0; border-bottom:.5px solid var(--rule); border-radius:0; background:transparent; padding:10px 0; min-height:44px; }
+.auth-page .local-mode-button { display:block; border:0; background:none; width:100%; }
+.auth-page .auth-boundary { text-align:center; font-size:11px; color:var(--mute); }
+
+.auth-page .auth-form label { font-weight:300; color:var(--mute); }
+.auth-page .auth-form input { border-bottom-color:var(--ink); color:var(--ink); }
