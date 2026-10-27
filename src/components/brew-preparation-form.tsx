@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PreparationControls } from "./preparation-controls";
+import { prepareCopy } from "./prepare-copy";
 import { cancelBrewAdjustment } from "@/domain/brew-preparation";
 import { beginnerRecipe, loadQuickPreparation, preparationFromRecipe, switchPreparationRecipe, type PreparationSeed } from "@/application/quick-preparation";
 import { safePrepareReturnTo } from "@/domain/start-navigation";
@@ -38,33 +40,16 @@ export function BrewPreparationForm({ sourceBrewId, recommendationId, preparatio
   }
   const back = returnTo ? safePrepareReturnTo(returnTo) : quick ? "/discover" : recipe ? `/recipes/${recipe.id}` : sourceBrewId ? `/journal/${sourceBrewId}${recommendationId ? "/analysis" : ""}` : "/journal";
   if (!seed) return <main className="state-page"><h1>Quick Prepare</h1><p role="status">{error ?? copy.loading}</p>{quick && error && beginnerRecipe(recipes) && <button type="button" className="secondary-button" onClick={() => { const fallback = beginnerRecipe(recipes); if (fallback) { setSeed(preparationFromRecipe(fallback)); setNotice(error); setError(null); } }}>{startCopy.useBeginner}</button>}<Link href={back}>←</Link></main>;
-  function changeNumber(field: "doseGrams" | "totalWaterGrams" | "temperatureCelsius", number: number) {
-    setSeed(current => { if (!current) return current; const next = structuredClone(current); next.snapshot[field].value = number;
-      next.snapshot.ratio = next.snapshot.totalWaterGrams.value / next.snapshot.doseGrams.value; return next; });
-  }
-  return <main className="prepare-page"><div className="prepare-topbar"><Link href={back}>←</Link><h1>Quick Prepare</h1><span /></div>
-    <section className="prepare-recipe"><h2>{seed.snapshot.title}</h2><label className="prepare-field">{startCopy.recipe}<select value={recipes.some(item => item.id === seed.plan.sourceRecipeId && item.currentVersion.version === seed.snapshot.sourceRecipeVersion) ? seed.plan.sourceRecipeId : "historical"} onChange={event => { const selected = recipes.find(item => item.id === event.target.value); if (selected) { setSeed(switchPreparationRecipe(seed, selected)); setSwitched(true); setOutdated(false); setError(null); } }}>
-      {!recipes.some(item => item.id === seed.plan.sourceRecipeId && item.currentVersion.version === seed.snapshot.sourceRecipeVersion) && <option value="historical">{seed.snapshot.title}（{startCopy.historical}）</option>}
-      {recipes.map(item => <option key={item.id} value={item.id}>{item.currentVersion.title}</option>)}
-    </select></label><p>{switched ? startCopy.switched : startCopy.switchHint}</p></section>
+  return <main className="prepare-page"><div className="prepare-topbar"><Link href={back}>←</Link><div><p className="eyebrow">{prepareCopy.kicker}</p><h1>{prepareCopy.title}</h1></div><span /></div>
+    <p>{switched ? startCopy.switched : startCopy.switchHint}</p>
     {notice && <p className="notice" role="status">{notice}</p>}
-    {outdated ? <p className="notice">{copy.outdated}</p> : null}
-    {error ? <p role="alert">{error}</p> : null}
-    <form onSubmit={event => { event.preventDefault(); start(); }}>
-      <section className="prepare-parameters">
-        {(["doseGrams", "totalWaterGrams", "temperatureCelsius"] as const).map(field => <label className="prepare-field" key={field}>{copy[field]}<input required min={1} max={field === "temperatureCelsius" ? 110 : undefined} type="number" step="any" value={seed.snapshot[field].value} onChange={event => changeNumber(field, Number(event.target.value))} /></label>)}
-        <label className="prepare-field">{copy.dripper}<input required value={seed.snapshot.dripper.value} onChange={event => setSeed({ ...seed, snapshot: { ...seed.snapshot, dripper: { ...seed.snapshot.dripper, value: event.target.value } } })} /></label>
-        <label className="prepare-field">{copy.grind}<input value={seed.snapshot.grindDescription?.value ?? ""} onChange={event => setSeed({ ...seed, snapshot: { ...seed.snapshot, grindDescription: { value: event.target.value, recipeDefault: seed.snapshot.grindDescription?.recipeDefault ?? "", source: "user_override" } } })} /></label>
-        <div className="prepare-field"><span>{copy.totalTime}</span><strong>{seed.snapshot.expectedTimeSeconds.value}</strong></div>
-      </section>
-      <section className="prepare-optional">
-        <label className="prepare-field">{copy.bean}<input value={seed.snapshot.bean?.name ?? ""} onChange={event => { const next = structuredClone(seed); if (event.target.value.trim()) next.snapshot.bean = { id: `local-bean:${event.target.value}`, name: event.target.value }; else delete next.snapshot.bean; setSeed(next); }} /></label>
-        <label className="prepare-field">{copy.equipment}<textarea value={seed.snapshot.equipment?.notes ?? ""} onChange={event => setSeed({ ...seed, snapshot: { ...seed.snapshot, equipment: { ...seed.snapshot.equipment, dripper: seed.snapshot.dripper.value, notes: event.target.value } } })} /></label>
-        <label className="prepare-field">{copy.goal}<textarea maxLength={120} value={seed.snapshot.userGoal ?? ""} onChange={event => setSeed({ ...seed, snapshot: { ...seed.snapshot, userGoal: event.target.value } })} /></label>
-      </section>
-      {seed.appliedAdjustment ? <aside className="prepare-note"><strong>{copy.applied}</strong><p>{seed.appliedAdjustment.adjustment.description}</p><button className="secondary-button" type="button" onClick={() => setSeed(cancelBrewAdjustment(seed))}>{copy.cancel}</button></aside> : null}
+    {outdated && <p className="notice">{copy.outdated}</p>}
+    {error && <p role="alert">{error}</p>}
+    <form onSubmit={event=>{event.preventDefault();start();}}>
+      <PreparationControls key={seed.plan.sourceRecipeId+":"+seed.snapshot.sourceRecipeVersion} seed={seed} onChange={setSeed} recipes={recipes.length?recipes:recipe?[recipe]:[]} onRecipe={selected=>{setSeed(switchPreparationRecipe(seed,selected));setSwitched(true);setOutdated(false);setError(null);}} />
+      {seed.appliedAdjustment && <aside className="prepare-note"><strong>{copy.applied}</strong><p>{seed.appliedAdjustment.adjustment.description}</p><button className="secondary-button" type="button" onClick={()=>setSeed(cancelBrewAdjustment(seed))}>{copy.cancel}</button></aside>}
       {switched && preparationId && <p className="notice" role="status">{startCopy.updatePreparation}</p>}
-      <div className="prepare-submit"><button className="primary-button" type="submit">{copy.start}</button><button className="secondary-button" type="button" onClick={() => start(true)}>{copy.saveLater}</button></div>
+      <div className="prepare-submit"><button className="secondary-button" type="button" onClick={()=>start(true)}>{prepareCopy.saveLater}</button><button className="primary-button" type="submit">{copy.start}</button></div>
     </form>
   </main>;
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { BrewPlan, BrewRecipeSnapshot } from "./types";
 import { applySuggestedPlanAdjustment, suggestedPlanAdjustmentSchema } from "./suggested-plan";
 import { quickPrepareSchema } from "./schemas";
+import { prepareExtrasSchema, preparationGearSchema } from "./prepare-options";
 import { calculateRatio } from "./recipe-utils";
 
 const scalar = z.union([z.number().finite(), z.string(), z.null()]);
@@ -20,7 +21,7 @@ export interface BrewPreparation { snapshot: BrewRecipeSnapshot; plan: BrewPlan;
 export interface SavedBrewPreparation extends BrewPreparation { id: string; createdAt: string; updatedAt: string; legacyPlanId?: string; legacyBrewId?: string; }
 export function isValidPreparation(seed: BrewPreparation) {
   const s = seed.snapshot;
-  return quickPrepareSchema.safeParse({ recipeVersionId: seed.plan.sourceRecipeId, coffeeDose: s.doseGrams.value, waterTotal: s.totalWaterGrams.value,
+  return prepareExtrasSchema.safeParse(s).success && preparationGearSchema.safeParse(s.equipment ?? {}).success && quickPrepareSchema.safeParse({ recipeVersionId: seed.plan.sourceRecipeId, coffeeDose: s.doseGrams.value, waterTotal: s.totalWaterGrams.value,
     waterTemperature: s.temperatureCelsius.value, dripper: s.dripper.value, grindSetting: s.grindDescription?.value,
     beanName: s.bean?.name, equipmentNotes: s.equipment?.notes, userGoal: s.userGoal }).success
     && Number.isFinite(s.expectedTimeSeconds.value) && s.expectedTimeSeconds.value > 0
@@ -50,8 +51,11 @@ export function synchronizePreparation(seed: BrewPreparation): BrewPreparation {
   if (s.equipment?.notes) p.equipmentNotes = s.equipment.notes; else delete p.equipmentNotes;
   if (s.userGoal) p.userGoal = s.userGoal; else delete p.userGoal;
   if (s.grindDescription) p.grindSetting = { ...s.grindDescription }; else delete p.grindSetting;
+  if (s.brewTemperatureMode) p.brewTemperatureMode = s.brewTemperatureMode; else delete p.brewTemperatureMode;
+  if (s.iceGrams !== undefined) p.iceGrams = s.iceGrams; else delete p.iceGrams;
+  if (s.equipment) p.equipment = { ...(s.equipment.grinder && {grinder:s.equipment.grinder}), ...(s.equipment.grinderSetting && {grinderSetting:s.equipment.grinderSetting}), ...(s.equipment.accessories && {accessories:[...s.equipment.accessories]}) }; else delete p.equipment;
   p.stages = s.steps.map(step => ({ id: step.id, order: step.order, title: step.title, targetWaterGrams: step.targetWaterGrams,
-    targetDurationSeconds: step.durationSeconds, pattern: step.pattern, instruction: step.instruction, guidance: step.guidance }));
+    targetDurationSeconds: step.durationSeconds, pourMethod: step.pourMethod, pattern: step.pattern, instruction: step.instruction, guidance: step.guidance }));
   return result;
 }
 export function applyBrewAdjustment(seed: BrewPreparation, metadata: Omit<AppliedBrewAdjustment, "version" | "changes">): BrewPreparation {

@@ -80,9 +80,9 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 - [x] token、字體（含 lining-nums）、按鈕（主按鈕固定在底部導覽上方 12px、高 52px；雙按鈕 1:1.6）照 visual-spec。（a455f9c）
 - [x] 底部導覽換新視覺：Brew 是中間深色圓形按鈕，**行為沿用 REQ-39 的 ＋（quick entry、上一杯 seed、returnTo、隱藏規則與測試全部保留）**。
   Collection 頁還不存在：本階段導覽先放 Discover／Brew／Journal／Me 四格，Collection 等階段 4 頁面做好再加，不放空殼頁。（a455f9c）
-- [ ] Journal 列、Recipe Detail／這一杯共用版型（參數格 3×2、STEPS 列）。沒有資料的欄位不顯示（不放「—」）。
-- [ ] Live Brew 換成 04 系列全螢幕 HUD 視覺；「等濾乾」狀態（04c，主按鈕「已濾乾，下一段」）一併做，這也回答了旅程 11 的滴濾段問題。不顯示即時重量。
-- [ ] 每頁以 390×844 手機截圖自查，無水平捲動。
+- [x] Journal 列、Recipe Detail／這一杯共用版型（參數格 3×2、STEPS 列）。沒有資料的欄位不顯示（不放「—」）。（8df2aec）
+- [x] Live Brew 換成 04 系列全螢幕 HUD 視覺；「等濾乾」狀態（04c，主按鈕「已濾乾，下一段」）一併做，這也回答了旅程 11 的滴濾段問題。不顯示即時重量。（8df2aec）
+- [x] 每頁以 390×844 手機截圖自查，無水平捲動。（8df2aec）
 
 ### 步驟 3：UI 改版階段 2：Quick Prepare 連動邏輯
 

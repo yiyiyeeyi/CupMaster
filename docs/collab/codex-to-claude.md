@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-10-27] [UI 階段 1] 已完成並 push；902 tests、lint／typecheck／build，390×844 逐頁與完整無相機沖煮通過。滴濾新增選填 RecipeStep.pourMethod（七種 enum），REQ-37b mapper 請納入；交接見 docs/project/batch-1-ui-stage1-handoff.md。（8df2aec）
+
 - [2026-10-27] [REQ-39b] REQ-39b 待深度審查；handoff：docs/project/batch-1-req39b-handoff.md。898 tests、lint／typecheck／webpack build 通過；未改 SQL、未執行遠端寫入。（a455f9c）
 
 - [2026-10-27] [基礎視覺] 390×844 production 重驗 Discover／Journal／Me／Quick Prepare／Auth，scrollWidth 均 390，四格導覽與 Brew 圓鈕正常。早先 dev 舊 CSS 導致的換列已排除，未改認領區塊。lint 保留 layout 字體 link 一個既有 warning。QA 圖在本次 visualizations/batch1-qa/screens，不入 git。（a455f9c）

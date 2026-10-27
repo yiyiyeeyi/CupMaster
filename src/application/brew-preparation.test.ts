@@ -30,6 +30,31 @@ function seed() {
   return { ...s, value, metadata };
 }
 describe("local brew preparation", () => {
+  it("round-trips optional gear, ice and pour methods through save, load and Brew creation", () => {
+    const s=seed(), original=structuredClone(s.value.snapshot);
+    s.value.snapshot.equipment={dripper:s.value.snapshot.dripper.value,grinder:"我的磨豆機",grinderSetting:"24",accessories:["Lilydrip"]};
+    s.value.snapshot.brewTemperatureMode="iced";s.value.snapshot.iceGrams=100;s.value.snapshot.steps[0].pourMethod="outward";
+    expect(s.preparations.save(s.value,"extras","2026-10-27T00:00:00.000Z").ok).toBe(true);
+    const loaded=s.service.load({preparationId:"extras"});
+    expect(loaded.ok).toBe(true);if(!loaded.ok)return;
+    expect(loaded.value.snapshot).toMatchObject({brewTemperatureMode:"iced",iceGrams:100,equipment:{grinder:"我的磨豆機",grinderSetting:"24",accessories:["Lilydrip"]}});
+    const created=s.service.create(loaded.value,"extras");
+    expect(created.ok).toBe(true);if(!created.ok)return;
+    const reread=s.brews.getById(created.value.id).value;
+    expect(reread?.recipeSnapshot.steps[0].pourMethod).toBe("outward");
+    expect(reread?.brewPlan).toMatchObject({brewTemperatureMode:"iced",iceGrams:100,equipment:{grinder:"我的磨豆機",grinderSetting:"24",accessories:["Lilydrip"]}});
+    expect(reread?.brewPlan.stages[0].pourMethod).toBe("outward");
+    expect(s.brews.getById(s.value.sourceBrewId!).value?.recipeSnapshot).toEqual(original);
+  });
+  it("keeps legacy options absent and rejects iced preparation without ice grams",()=>{
+    const s=seed();
+    expect(s.preparations.save(s.value,"old","2026-10-27T00:00:00.000Z").ok).toBe(true);
+    const old=s.service.load({preparationId:"old"});
+    expect(old.ok && old.value.snapshot.brewTemperatureMode).toBeUndefined();
+    expect(old.ok && old.value.snapshot.iceGrams).toBeUndefined();
+    s.value.snapshot.brewTemperatureMode="iced";
+    expect(s.service.create(s.value).ok).toBe(false);
+  });
   it("cancels total time and linked stage only when unchanged, leaving the source immutable", () => {
     const { value, metadata } = seed(), before = structuredClone(value);
     const applied = applyBrewAdjustment(value, metadata);
