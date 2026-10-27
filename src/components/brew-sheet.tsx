@@ -1,3 +1,4 @@
+import { effectivePourMethod } from "@/domain/pour-method";
 import type { BrewStageResult, RecipeStep } from "@/domain";
 import { formatDuration } from "@/domain";
 import { brewSheetCopy as copy } from "./brew-sheet-copy";
@@ -24,7 +25,8 @@ export function BrewSteps({ steps, results, startedAt }: { steps: RecipeStep[]; 
     const planned = ordered.slice(0,index).reduce((sum,step)=>sum+(step.durationSeconds ?? 0),0);
     const result = results?.find(result => result.stageId === step.id);
     const actual = result && startedAt ? Math.max(0, Math.round((Date.parse(result.actualStartedAt)-Date.parse(startedAt))/1000)) : undefined;
-    const method = step.pourMethod ? copy.pourMethods[step.pourMethod] : step.pattern ? copy.patterns[step.pattern] : undefined;
+    const canonical = effectivePourMethod(step);
+    const method = canonical ? copy.pourMethods[canonical] : step.pattern ? copy.patterns[step.pattern] : undefined;
     return <li key={step.id}><span className="brew-step-icon" aria-hidden="true">{step.pourMethod === "drain" ? "⋮" : "◎"}</span><div><h3>{step.title}<time>{formatDuration(actual ?? planned)}</time></h3>{method && <p>{method}</p>}<p>{step.instruction}</p></div><strong aria-label={copy.target}>{step.targetWaterGrams}<small> g</small></strong></li>;
   })}</ol></section>;
 }

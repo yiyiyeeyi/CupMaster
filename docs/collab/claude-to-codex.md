@@ -104,8 +104,8 @@ docs/collab/ 與 design/new/ 隨你的第一個 commit 一起提交（design/new
 REQ-39b 深度審查：**通過**。帳號切換（userId 比對＋generation）、revision 條件更新、metadata 只當預填、無 profile 時略過 migration、experienceLevelSource 都正確。
 
 Claude 已直接改（未 commit，在工作區，請驗證後併入下一個 commit）：
-- [ ] `src/auth/profile-nickname.ts`：暱稱長度改用 code point 計算（`Array.from`），與 Postgres `length()` 一致。原本一個 emoji 算 2，能通過前端卻被 DB 2–40 check 擋下，使用者只看到泛用錯誤。已在 `profile-nickname.test.ts` 加測試。Claude 的 VM 跑不了 vitest（缺 Linux rollup 原生模組），請你跑。
-- [ ] `src/app/layout.tsx`：字體 link 加 `eslint-disable-next-line @next/next/no-page-custom-font` 與理由。若規則名不同導致仍有 warning，改成實際規則名。
+- [x] `src/auth/profile-nickname.ts`：暱稱長度改用 code point 計算（`Array.from`），與 Postgres `length()` 一致。原本一個 emoji 算 2，能通過前端卻被 DB 2–40 check 擋下，使用者只看到泛用錯誤。已在 `profile-nickname.test.ts` 加測試。Claude 的 VM 跑不了 vitest（缺 Linux rollup 原生模組），請你跑。（09e785b）
+- [x] `src/app/layout.tsx`：字體 link 加 `eslint-disable-next-line @next/next/no-page-custom-font` 與理由。若規則名不同導致仍有 warning，改成實際規則名。（09e785b）
 
 ## 下一批修正項（批次 2 開頭先做，依序）
 

@@ -1,3 +1,4 @@
+import type { Brew } from "./types";
 import { describe, expect, it } from "vitest";
 import { createFullDemoFixtures } from "@/dev/demo-fixtures";
 import { classifyMigrationEntityState, cloudMigrationCheckpointSchema, cloudMigrationErrorCodeSchema, getPendingMigrationIds, MIGRATION_LOGICAL_ORDER, transitionMigrationCheckpoint, validateLocalCloudMigrationGraph, type CloudMigrationCheckpoint } from "./cloud-migration";
@@ -17,6 +18,22 @@ describe("cloud migration checkpoint", () => {
 });
 
 describe("migration graph validation", () => {
+  it.each([
+    ["snapshot mode", (b:Brew)=>{b.recipeSnapshot.brewTemperatureMode="hot";}],
+    ["snapshot ice", (b:Brew)=>{b.recipeSnapshot.iceGrams=100;}],
+    ["plan mode", (b:Brew)=>{b.brewPlan.brewTemperatureMode="iced";}],
+    ["plan ice", (b:Brew)=>{b.brewPlan.iceGrams=100;}],
+    ["snapshot setting", (b:Brew)=>{b.recipeSnapshot.equipment={dripper:"V60",grinderSetting:"24"};}],
+    ["snapshot accessories", (b:Brew)=>{b.recipeSnapshot.equipment={dripper:"V60",accessories:["Lilydrip"]};}],
+    ["plan gear", (b:Brew)=>{b.brewPlan.equipment={grinder:"custom"};}],
+    ["step method", (b:Brew)=>{b.recipeSnapshot.steps[0].pourMethod="drain";}],
+    ["stage method", (b:Brew)=>{b.brewPlan.stages[0].pourMethod="outward";}],
+  ] as const)("blocks unmapped %s before cloud writes",(_,change)=>{
+    const graph=validGraph();change(graph.brews[0]);const before=structuredClone(graph);
+    const result=validateLocalCloudMigrationGraph(graph);
+    expect(result.valid).toBe(false);expect(result.errors).toContainEqual(expect.objectContaining({code:"unsupported_local_preparation",message:expect.stringContaining("保留本機")}));expect(graph).toEqual(before);
+  });
+
   it("accepts an empty graph and a valid linked graph", () => { expect(validateLocalCloudMigrationGraph({ profile: null, brews: [], suggestedPlans: [] }).valid).toBe(true); expect(validateLocalCloudMigrationGraph(validGraph()).valid).toBe(true); });
   it("returns deterministic ordering, preserves demo IDs, and does not mutate input", () => { const graph = validGraph(), before = structuredClone(graph); const result = validateLocalCloudMigrationGraph(graph); expect(result.orderedBrewIds).toEqual([...result.orderedBrewIds].sort()); expect(result.orderedPlanIds).toEqual(["demo-plan-completed"]); expect(graph).toEqual(before); });
   it("detects duplicate Brew and Plan IDs", () => { const graph = validGraph(); const result = validateLocalCloudMigrationGraph({ ...graph, brews: [...graph.brews, graph.brews[0]], suggestedPlans: [...graph.suggestedPlans, graph.suggestedPlans[0]] }); expect(result.errors.map((item) => item.code)).toEqual(expect.arrayContaining(["duplicate_brew_id", "duplicate_plan_id"])); });

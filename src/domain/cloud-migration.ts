@@ -38,9 +38,19 @@ export type MigrationGraphErrorCode = "unsupported_local_preparation" | "duplica
 export interface MigrationGraphError { code: MigrationGraphErrorCode; entityId: string; message: string; }
 export interface LocalCloudMigrationGraph { profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
 
+/** Fail closed until REQ-37b can preserve every optional local field. */
+export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
+  const snapshot=brew.recipeSnapshot, plan=brew.brewPlan;
+  return brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
+    || snapshot.brewTemperatureMode !== undefined || snapshot.iceGrams !== undefined
+    || plan.brewTemperatureMode !== undefined || plan.iceGrams !== undefined || plan.equipment !== undefined
+    || snapshot.equipment?.grinderSetting !== undefined || snapshot.equipment?.accessories !== undefined
+    || snapshot.steps.some(step=>step.pourMethod !== undefined) || plan.stages.some(stage=>stage.pourMethod !== undefined);
+}
+
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
-  for (const brew of input.brews) if (brew.appliedAdjustment !== undefined || brew.legacyPreparationId || brew.sourcePreparationId) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "新準備資料暫保留本機，請待 REQ-37b；未寫入雲端新表。" });
+  for (const brew of input.brews) if (hasUnmappedLocalBrewFields(brew)) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "這筆紀錄含尚未支援雲端搬移的欄位；保留本機，請待 REQ-37b。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);
   for (const plan of input.suggestedPlans) planCounts.set(plan.id, (planCounts.get(plan.id) ?? 0) + 1);
