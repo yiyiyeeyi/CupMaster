@@ -29,11 +29,8 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 
 ## Claude 認領中
 
-- `design/new/`（新版 UI 設計與規範，Claude 維護；Codex 只讀，有問題寫到 codex-to-claude.md）
-- `design/README.md`（只加了指向 design/new 的一段）
-- `src/app/globals.css` 的 :root token、全域字體／按鈕／focus、`.bottom-nav` 規則（Claude 正在做 UI 階段 1 的基礎視覺，2026-10-27）
-- `src/components/bottom-navigation.tsx`（只改呈現；路由規則仍在 `src/domain/start-navigation.ts`，那支 Codex 可以改）
-- `src/app/layout.tsx`（只加字體 link）
+- `design/new/`（Claude 維護；Codex 只讀）
+- globals.css／bottom-navigation.tsx／layout.tsx 已於 2026-10-27 釋出，之後由你自由修改。
 
 ## 本批範圍（批次 1）
 
@@ -102,6 +99,67 @@ lint、typecheck、全部測試、build 全過即 commit＋push 到 feature/came
 docs/collab/ 與 design/new/ 隨你的第一個 commit 一起提交（design/new 只讀，不要改內容）。
 不 merge main、不手動部署、不改 SQL／雲端。
 
-## 下一批修正項（批次檢查後由 Claude 填寫）
+## 批次 1 審查結果（Claude，2026-10-27）
 
+REQ-39b 深度審查：**通過**。帳號切換（userId 比對＋generation）、revision 條件更新、metadata 只當預填、無 profile 時略過 migration、experienceLevelSource 都正確。
+
+Claude 已直接改（未 commit，在工作區，請驗證後併入下一個 commit）：
+- [ ] `src/auth/profile-nickname.ts`：暱稱長度改用 code point 計算（`Array.from`），與 Postgres `length()` 一致。原本一個 emoji 算 2，能通過前端卻被 DB 2–40 check 擋下，使用者只看到泛用錯誤。已在 `profile-nickname.test.ts` 加測試。Claude 的 VM 跑不了 vitest（缺 Linux rollup 原生模組），請你跑。
+- [ ] `src/app/layout.tsx`：字體 link 加 `eslint-disable-next-line @next/next/no-page-custom-font` 與理由。若規則名不同導致仍有 warning，改成實際規則名。
+
+## 下一批修正項（批次 2 開頭先做，依序）
+
+- [ ] **P1 雲端遷移會悄悄丟資料**：`src/domain/cloud-migration.ts` 的 preflight 只擋 appliedAdjustment／legacyPreparationId／sourcePreparationId。批次 1 新增的本機欄位（RecipeStep／BrewStage.pourMethod、snapshot／plan 的 brewTemperatureMode、iceGrams、equipment.grinderSetting、equipment.accessories、plan.equipment）雲端 mapper 都還沒有，現在登入做 migration 會把這些欄位直接丟掉。在 REQ-37b 之前，preflight 遇到任一欄位有值就同樣擋下並說明「保留本機」。補測試：每個欄位各一筆。
+- [ ] **P1 build 設定**：package.json 的 `next build` 在 Next 16 預設用 Turbopack，你本機會卡住，目前只用 `--webpack` 驗證過。查清楚是本機記憶體問題還是專案問題；部署環境若也用預設 build，要嘛確認 Turbopack 在那裡能過，要嘛把 build script 固定成 `next build --webpack`。結論寫進 handoff。
+- [ ] **P2 研磨有兩個真實來源**：`snapshot.grindDescription`（user_override）與 `equipment.grinderSetting` 同時存格數，換配方時已經在手動同步。定一個為準（建議 equipment.grinder＋grinderSetting），grindDescription 只由它推導；加測試保證兩者不會分歧。
+- [ ] **P2 步驟有兩個注水欄位**：舊 `pattern`（center／spiral／pulse／continuous／immersion）和新 `pourMethod`（七種）重疊。寫一個明確的對應或標記 pattern 為 deprecated，REQ-37b 只同步一個。
+- [ ] **P2 Notion REQ-37b**：把上面所有新本機欄位，以及 profiles.preferences 的 displayNameConfirmed／experienceLevelSource，補進 REQ-37b 的 mapper 清單。
 - （REQ-54 已記）新偏好資料損毀時需提供「重設偏好」路徑。
+
+## 批次 2（yiyi 2026-10-27 決定：Collection＋豆子詳情頁；磨豆機刻度改三種格式）
+
+順序：上面「下一批修正項」P1／P2 → 步驟 A 磨豆機刻度 → 步驟 B 豆子資料 → 步驟 C Collection → 步驟 D Bean Detail。
+步驟 A、B 動到本機資料 schema，**完成 push 後在 codex-to-claude.md 寫一行，Claude 立即深度審查**；你可以先繼續下一步。
+
+### 步驟 A：磨豆機刻度三種格式（取代上面 P2「研磨有兩個真實來源」的做法）
+
+yiyi 查了品牌配方與 Reddit：使用者寫刻度的方式不只整數，但不需要每台磨豆機一套介面。由**磨豆機型號決定格式**，使用者不用自己選。
+
+| 格式 | 輸入 | 例子 | 首批型號 |
+| --- | --- | --- | --- |
+| A 單一數字 | 一個整數，單位依型號（格／clicks／Setting／Grind Size） | `18` | Timemore C3、Comandante C40、Baratza Encore ESP、Breville Smart Grinder Pro |
+| B 複合刻度 | 同一個元件，依型號 2 或 3 欄 | K-Ultra `0.9.2`（圈．數字．小格）；Ode Gen 2 `5.1`（主刻度＋小格，5.1＝5 又 1/3，**不是小數 5.1**） | 1Zpresso K-Ultra、Fellow Ode Gen 2 |
+| C 自己輸入數字 | 數字鍵盤輸入框，可有小數點，不用滾輪，使用者不必先定義刻度表 | `2.5`、`12` | Eureka Mignon Specialità、所有自訂磨豆機、未知型號 |
+
+- [ ] 資料：一份磨豆機登錄表（`src/domain/grinders.ts` 之類），每台寫 id、顯示名稱、格式、單位或各欄名稱與範圍。只放上面 7 台，有來源的才加；未知型號一律 C。
+- [ ] 儲存：結構化，不存成可被誤算的小數。建議 `{ grinderId, format: "single" | "compound" | "number", parts?: number[], value?: number }`（C 存一個數字，可有小數；像「+1.5 圈」這種少見寫法放進這杯的筆記，不另做欄位）；顯示字串由它推導（`18 格`、`0.9.2`、`5.1`）。
+- [ ] 這就是研磨的唯一真實來源：`equipment.grinderSetting` 與 `snapshot.grindDescription` 改成由它推導或遷移掉，加測試保證不分歧。舊資料只有字串時，原字串保留在舊欄位當顯示用，不猜格式、不轉成數字。
+- [ ] Quick Prepare 的格數小選單依格式切換：A 一個數字滾輪；B 2／3 欄滾輪並排（同一個元件）；C 數字輸入框（inputmode="decimal"）。固定框邏輯不變。
+- [ ] 換磨豆機時：格式不同就清空刻度、提示「刻度格式不同，請重新設定」，不換算。μm 照舊不顯示。
+- [ ] 比較或排序只在同一台磨豆機內進行。
+
+### 步驟 B：豆子資料（新增本機實體）
+
+目前豆子只是每杯 `recordDetails.bean` 的文字欄位，沒有「一包豆子」的實體。
+- [ ] 新增本機 Bean 庫（獨立 localStorage key＋zod envelope，照現有 repository 寫法）。欄位照 ui-ux-spec §11：烘焙商、產區、處理法、烘焙度、莊園、品種、烘焙日、產季、海拔、色值（Agtron）、拼配、風味，全部選填。**不追蹤剩下幾克。**
+- [ ] Brew 加選填 `beanId`。舊紀錄不改寫；第一次進 Collection 時，依過去紀錄的豆名＋烘焙商找出不同的豆子，**詢問使用者**後建立（可全選或略過），不要靜默大量建立。
+- [ ] Quick Prepare 的豆子欄改成從豆子庫挑選或新增，選了就寫 beanId，並把顯示用欄位複製進這杯的 snapshot（舊豆子被編輯不會改寫歷史杯）。
+- [ ] 刪除豆子：歷史杯保留自己的快照，只解除連結。
+- [ ] 新欄位（Bean 庫、beanId、刻度結構）一律補進 P1 的 cloud-migration preflight 擋下清單和 REQ-37b mapper 清單。
+
+### 步驟 C：Collection（10-collection.png）
+
+- [ ] 底部導覽加回第五格 Collection（Discover／Collection／Brew／Journal／Me）。
+- [ ] 分頁只做「豆子」和「方案」（方案＝現有的下次想沖準備）。「配方」「收藏」還沒有資料來源，**這次不放分頁**，不做空殼。
+- [ ] 豆子兩欄豆袋牆：沒有照片，豆袋位置用 `--tile` 底＋豆名文字排版，不放假圖。卡片寫「沖過 N 次」；「最佳 N/5」等有 1–5 星評分再顯示（現在只有 liked／neutral／disliked，不要換算成星）。
+- [ ] 最後一格是「＋ 新增豆子」（手動表單）。「拍一包新豆」要鏡頭與去背，這次不做。
+
+### 步驟 D：Bean Detail（11、11b）
+
+- [ ] 主視覺、BEAN PROFILE 兩行＋「更多 ▾」、深色分隔線下「我的紀錄」（沖過 N 次、最近幾杯，沿用 Journal 列）。不知道的欄位不顯示。
+- [ ] 「最好的一杯 ★」「適合這包的配方」「AI 建議」：沒有星等與 AI，**這次不放**。
+- [ ] 按鈕：編輯豆子｜用這包沖（帶 beanId 進 Quick Prepare）。
+- [ ] 390×844 截圖自查；Collection／Bean Detail 視覺不確定時寫到 codex-to-claude.md 問 Claude。
+
+### 每步共通
+lint、typecheck、全部測試、build 全過即 commit＋push，Notion 對應項更新，handoff 寫在 docs/project/batch-2-*.md。全部做完在 codex-to-claude.md 寫「批次 2 完成」。不 merge main、不部署、不改 SQL／雲端。

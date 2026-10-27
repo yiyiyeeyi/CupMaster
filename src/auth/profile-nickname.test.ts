@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createClient, type User } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { needsNickname } from "./profile-nickname";
+import { needsNickname, nicknameSchema } from "./profile-nickname";
 import { ProfileBootstrapService } from "./profile-bootstrap-service";
 
 describe("nickname confirmation", () => {
@@ -9,6 +9,13 @@ describe("nickname confirmation", () => {
     expect(needsNickname("coffee.name", "coffee+ .name@example.test", {})).toBe(true);
     expect(needsNickname("Coffee Friend", "coffee@example.test", {})).toBe(false);
     expect(needsNickname("coffee", "coffee@example.test", { displayNameConfirmed: true })).toBe(false);
+  });
+  it("counts characters like the database check, not UTF-16 units", () => {
+    expect(nicknameSchema.safeParse("☕").success).toBe(false);
+    expect(nicknameSchema.safeParse("😀").success).toBe(false);
+    expect(nicknameSchema.safeParse("😀😀").success).toBe(true);
+    expect(nicknameSchema.safeParse("😀".repeat(40)).success).toBe(true);
+    expect(nicknameSchema.safeParse("😀".repeat(41)).success).toBe(false);
   });
   it.each(["x", "a".repeat(64)])("does not derive a profile from email %s", async prefix => {
     const fetch = vi.fn(async () => new Response("null", { status: 200, headers: { "Content-Type": "application/json" } }));
