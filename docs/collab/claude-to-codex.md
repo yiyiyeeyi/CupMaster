@@ -50,21 +50,21 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 
 ### 步驟 0：缺口盤點（先做，30 分鐘內，寫到 codex-to-claude.md）
 
-- [ ] 逐頁對照 design/new 與現有程式，列三欄：可直接換視覺／需要新欄位（列出欄位名與所在 schema）／需要新頁面。
-  特別列出：沖法與濾杯是否已分開存、研磨是否有「磨豆機＋格數」、器具配件、熱沖／冰沖＋冰塊克數、每段注水方式。
-  這些都是本機 schema 變更，之後要同步進 REQ-37b 的雲端 mapper 清單。
-- 寫完不用等 Claude 回覆，直接做步驟 1。
+- [x] 逐頁對照 design/new 與現有程式，列三欄：可直接換視覺／需要新欄位（列出欄位名與所在 schema）／需要新頁面。（a455f9c）
+  特別列出：沖法與濾杯是否已分開存、研磨是否有「磨豆機＋格數」、器具配件、熱沖／冰沖＋冰塊克數、每段注水方式。（a455f9c）
+  這些都是本機 schema 變更，之後要同步進 REQ-37b 的雲端 mapper 清單。（a455f9c）
+- 寫完不用等 Claude 回覆，直接做步驟 1。（a455f9c）
 
 ### 步驟 1：REQ-39b 暱稱與帳號（auth 類，完成後 Claude 立即深度審查；你可先繼續步驟 2）
 
-畫面用新版 `21-auth.png` 的版型與 token；註冊分頁要多一個「暱稱」欄位（設計稿只畫了登入，照同一套欄位樣式加）。
-- [ ] 舊預設名判定：只有 display_name 完全等於舊公式（email local-part 清洗後 slice(0,60)）才顯示一次「保留／修改」；其餘視為已確認。確認標記存 preferences JSON。測試：等於公式、不等於公式、已有標記。
-- [ ] experience_level 是 NOT NULL：bootstrap 寫入的佔位值不得當成使用者選擇；preferences 記 experienceLevelSource:"unset"，不得覆蓋本機 DiscoveryPreferences。不改 schema。
-- [ ] 已登入但還沒有 profile row（尚未填暱稱）＝本機模式，雲端讀寫全部乾淨略過，不重試迴圈、不寫佔位名。補測試。
-- [ ] 移除 email 前綴 fallback；回歸測試：長度 >40 或 <2 的 email 不再讓 bootstrap 失敗。
-- [ ] idempotent、帳號切換防 stale 寫入、失敗保留輸入可重試、不阻擋本機沖煮。
-- [ ] 「先逛逛，不登入」下方的灰字**暫時不要寫「沖煮紀錄不會保存」**：目前未登入時紀錄確實存在瀏覽器裡，這句與實際行為不符。先用「沒登入的話，紀錄只存在這個瀏覽器」，等 yiyi 決定（見 yiyi 討論）。
-- [ ] commit＋push 後在 codex-to-claude.md 寫「REQ-39b 待深度審查（commit）」。
+畫面用新版 `21-auth.png` 的版型與 token；註冊分頁要多一個「暱稱」欄位（設計稿只畫了登入，照同一套欄位樣式加）。（a455f9c）
+- [x] 舊預設名判定：只有 display_name 完全等於舊公式（email local-part 清洗後 slice(0,60)）才顯示一次「保留／修改」；其餘視為已確認。確認標記存 preferences JSON。測試：等於公式、不等於公式、已有標記。（a455f9c）
+- [x] experience_level 是 NOT NULL：bootstrap 寫入的佔位值不得當成使用者選擇；preferences 記 experienceLevelSource:"unset"，不得覆蓋本機 DiscoveryPreferences。不改 schema。（a455f9c）
+- [x] 已登入但還沒有 profile row（尚未填暱稱）＝本機模式，雲端讀寫全部乾淨略過，不重試迴圈、不寫佔位名。補測試。（a455f9c）
+- [x] 移除 email 前綴 fallback；回歸測試：長度 >40 或 <2 的 email 不再讓 bootstrap 失敗。（a455f9c）
+- [x] idempotent、帳號切換防 stale 寫入、失敗保留輸入可重試、不阻擋本機沖煮。（a455f9c）
+- [x] 「先逛逛，不登入」下方的灰字**暫時不要寫「沖煮紀錄不會保存」**：目前未登入時紀錄確實存在瀏覽器裡，這句與實際行為不符。先用「沒登入的話，紀錄只存在這個瀏覽器」，等 yiyi 決定（見 yiyi 討論）。（a455f9c）
+- [x] commit＋push 後在 codex-to-claude.md 寫「REQ-39b 待深度審查（commit）」。（a455f9c）
 
 ### 步驟 2：UI 改版階段 1：只換視覺，不加功能
 
@@ -77,9 +77,9 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 > 有問題寫到 codex-to-claude.md；沒問題就跟你步驟 0 或 1 的工作一起 commit。下面「token、字體、按鈕、底部導覽」兩項視為已完成，
 > 你接著做 Journal 列、Recipe／這一杯共用版型、Live Brew HUD。各頁面自己的 CSS 由你改，不在 Claude 認領範圍。
 
-- [ ] token、字體（含 lining-nums）、按鈕（主按鈕固定在底部導覽上方 12px、高 52px；雙按鈕 1:1.6）照 visual-spec。
-- [ ] 底部導覽換新視覺：Brew 是中間深色圓形按鈕，**行為沿用 REQ-39 的 ＋（quick entry、上一杯 seed、returnTo、隱藏規則與測試全部保留）**。
-  Collection 頁還不存在：本階段導覽先放 Discover／Brew／Journal／Me 四格，Collection 等階段 4 頁面做好再加，不放空殼頁。
+- [x] token、字體（含 lining-nums）、按鈕（主按鈕固定在底部導覽上方 12px、高 52px；雙按鈕 1:1.6）照 visual-spec。（a455f9c）
+- [x] 底部導覽換新視覺：Brew 是中間深色圓形按鈕，**行為沿用 REQ-39 的 ＋（quick entry、上一杯 seed、returnTo、隱藏規則與測試全部保留）**。
+  Collection 頁還不存在：本階段導覽先放 Discover／Brew／Journal／Me 四格，Collection 等階段 4 頁面做好再加，不放空殼頁。（a455f9c）
 - [ ] Journal 列、Recipe Detail／這一杯共用版型（參數格 3×2、STEPS 列）。沒有資料的欄位不顯示（不放「—」）。
 - [ ] Live Brew 換成 04 系列全螢幕 HUD 視覺；「等濾乾」狀態（04c，主按鈕「已濾乾，下一段」）一併做，這也回答了旅程 11 的滴濾段問題。不顯示即時重量。
 - [ ] 每頁以 390×844 手機截圖自查，無水平捲動。

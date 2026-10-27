@@ -27,6 +27,15 @@ function setup(stageCount = 2) {
   return { storage, brews, live, draft, service, setTime: (seconds: number) => { now = start + seconds * 1_000; } };
 }
 describe("V1 interruption policy", () => {
+  it("keeps drain stages pending after foreground recovery and overrun", () => {
+    const s = setup(), current = s.brews.getById(s.draft.id).value!;
+    current.recipeSnapshot.steps[0].pourMethod = "drain";
+    s.brews.updateDraft(current); s.service.leave(s.draft.id); s.setTime(60);
+    const result = s.service.inspect(s.draft.id, true);
+    expect(result.ok && result.brew.currentStageOrder).toBe(0);
+    expect(result.ok && result.state).toBe("active");
+    expect(s.brews.getById(s.draft.id).value?.stageResults).toEqual([]);
+  });
   it("continues a late manual stage timeline past the original total until its final stage is reachable", () => {
     const s = setup(3);
     const service = new BrewService(s.brews, { now: () => new Date(start + 20_000).toISOString() });

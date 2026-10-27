@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatDuration, isAnalysisOutdated } from "@/domain";
+import { formatRatio } from "@/domain";
 import { groupJournal, journalDateKey, journalFilter, type JournalFilter, type JournalItem } from "@/domain/journal";
 import type { SavedBrewPreparation } from "@/domain/brew-preparation";
 import { JournalService } from "@/application/journal-service";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
 import { journalCopy as copy } from "./journal-copy";
+import "./journal-v17.css";
 import styles from "./brew-return-dialog.module.css";
 
 export function JournalHome() {
@@ -51,23 +52,19 @@ export function JournalHome() {
         <span className="status-line">{copy.preparations}</span><h3>{entry.snapshot.bean?.name ?? copy.noBean} / {entry.snapshot.title}</h3>
         {entry.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{entry.appliedAdjustment.adjustment.description}</p>}
         <p>{copy.savedDate}：{new Date(entry.updatedAt).toLocaleString("zh-TW")}</p>
-        <dl><div><dt>{copy.time}</dt><dd>{formatDuration(entry.snapshot.expectedTimeSeconds.value)}</dd></div><div><dt>{copy.dose}</dt><dd>{entry.snapshot.doseGrams.value}g</dd></div><div><dt>{copy.water}</dt><dd>{entry.snapshot.totalWaterGrams.value}g</dd></div></dl>
+        <dl><div><dt>{copy.time}</dt><dd>{`${Math.floor(entry.snapshot.expectedTimeSeconds.value / 60)}:${String(entry.snapshot.expectedTimeSeconds.value % 60).padStart(2,"0")}`}</dd></div><div><dt>{copy.dose}</dt><dd>{entry.snapshot.doseGrams.value}g</dd></div><div><dt>{copy.water}</dt><dd>{entry.snapshot.totalWaterGrams.value}g</dd></div></dl>
         <div className={styles.actions}><Link className="primary-button" href={href}>{copy.start}</Link><Link className="secondary-button" href={href}>{copy.edit}</Link>
           <button className="secondary-button" type="button" onClick={event => { deleteButton.current = event.currentTarget; setDeleting(entry); setDeleteError(null); }}>{copy.remove}</button></div>
       </div></article>;
     }
     const brew = item.brew;
-    return <Link className="journal-card" href={`/journal/${encodeURIComponent(brew.id)}`} key={brew.id}><div>
-      <span className="status-line">{copy.completed}</span><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? copy.noBean} / {brew.recipeSnapshot.title}</h3>
-      {brew.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{brew.appliedAdjustment.adjustment.description}</p>}
-      <p>{copy.completedDate}：{new Date(item.at).toLocaleString("zh-TW")}</p>
-      <p>{brew.flavorFeedback ? copy.feedbackAdded : brew.feedbackStatus === "skipped" ? copy.feedbackSkipped : copy.feedbackMissing} · {isAnalysisOutdated(brew) ? copy.analysisOutdated : brew.analysis ? copy.analysisAdded : copy.analysisMissing}</p>
-      <dl><div><dt>{copy.time}</dt><dd>{brew.actualTotalTimeSeconds === null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</dd></div><div><dt>{copy.dose}</dt><dd>{brew.recordDetails?.actualDoseGrams == null ? `${brew.recipeSnapshot.doseGrams.value}g ${copy.target}` : `${brew.recordDetails.actualDoseGrams}g ${copy.actual}`}</dd></div><div><dt>{copy.water}</dt><dd>{brew.recordDetails?.actualWaterGrams == null ? `${brew.recipeSnapshot.totalWaterGrams.value}g ${copy.target}` : `${brew.recordDetails.actualWaterGrams}g ${copy.actual}`}</dd></div></dl>
-      <strong className="journal-card-action">{copy.details}</strong>
-    </div><span aria-hidden="true">→</span></Link>;
+    return <Link className="journal-brew-row" href={`/journal/${encodeURIComponent(brew.id)}`} key={brew.id}>
+      <span className="journal-bean-tile" aria-hidden="true">♧</span><div><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? brew.recipeSnapshot.title}</h3><p>{brew.recipeSnapshot.title} · {brew.recordDetails?.equipment?.dripper ?? brew.recipeSnapshot.dripper.value}</p>{brew.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{brew.appliedAdjustment.adjustment.description}</p>}</div><div className="journal-ratio"><strong>{formatRatio(brew.recordDetails?.actualDoseGrams ?? brew.recipeSnapshot.doseGrams.value, brew.recordDetails?.actualWaterGrams ?? brew.recipeSnapshot.totalWaterGrams.value)}</strong><small>粉水比</small></div>
+    </Link>;
+
   }
   const failed = !!data && (filter !== "preparations" && !!data.brewError || filter !== "completed" && !!data.preparationError);
-  return <main className="journal-page"><header><p className="eyebrow">Remember</p><h1>Journal</h1><p>{copy.description}</p></header>
+  return <main className="journal-page"><header><p className="eyebrow">BREW JOURNAL</p><h1>Journal</h1><p>{copy.description}</p></header>
     <p className="notice">{copy.localNotice}</p>
     <nav className="section-heading" aria-label={copy.filters}>{(["all", "completed", "preparations"] as const).map(value => <button className="secondary-button" type="button" key={value} aria-pressed={filter === value} onClick={() => choose(value)}>{copy[value]}</button>)}</nav>
     {data?.brewError && <p role="alert">{data.brewError}<button type="button" onClick={reload}>{copy.retry}</button></p>}

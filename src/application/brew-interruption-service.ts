@@ -30,6 +30,7 @@ export function projectInterruptedProgress(brew: Brew, now: number, finish = fal
   while (value.currentStageOrder < steps.length) {
     const index = value.currentStageOrder;
     const step = steps[index];
+    if (step.pourMethod === "drain") return finish ? null : value;
     const start = Date.parse(value.currentStageStartedAt ?? "");
     const pause = value.currentStagePausedSeconds ?? 0;
     if (!Number.isFinite(start) || !step.durationSeconds || step.durationSeconds <= 0

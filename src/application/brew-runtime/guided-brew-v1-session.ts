@@ -126,6 +126,15 @@ export class GuidedBrewV1Session {
     return this.publish();
   }
 
+  advanceStage(timestampMs: number): GuidedBrewV1Snapshot {
+    if (!this.started || this.runtime.getSnapshot().state === "paused") return this.getSnapshot();
+    this.lastTimestampMs = Math.max(timestampMs, this.lastTimestampMs);
+    this.runtime.manualPourStop(this.lastTimestampMs);
+    if (this.runtime.getSnapshot().state === "paused_between_pours") this.runtime.manualPourStart(this.lastTimestampMs);
+    this.notifyTransitions(this.runtime.getSnapshot());
+    return this.publish();
+  }
+
   pause(timestampMs: number): GuidedBrewV1Snapshot {
     timestampMs = Math.max(timestampMs, this.lastTimestampMs);
     const previous = this.runtime.getSnapshot().state;

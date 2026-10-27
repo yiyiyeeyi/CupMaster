@@ -17,6 +17,8 @@ import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
 import { BrewBackButton } from "./brew-back-button";
 import { LiveBrewWakeLock } from "./live-brew-wake-lock";
+import { LiveBrewHud } from "./live-brew-hud";
+import { brewSheetCopy as sheetCopy } from "./brew-sheet-copy";
 import { guidedBrewCopy as copy } from "./guided-brew-copy";
 
 const DRIPPER_REGION: Readonly<NormalizedRect> = { x: 0.2, y: 0.22, width: 0.6, height: 0.5 };
@@ -58,6 +60,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const awayRef = useRef(false);
   const redirectingRef = useRef(false);
   const overrunRef = useRef(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [overrun, setOverrun] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const samplerRef = useRef<FrameSampler | null>(null);
@@ -309,7 +312,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const isSetup = snapshot.phase !== "BREWING" && snapshot.phase !== "COMPLETED";
 
   return (
-    <main className="guided-brew-page">
+    <main className={`guided-brew-page${isSetup ? "" : " is-live"}`}>
       <div className="live-topbar">
         <BrewBackButton brewId={brew.id} onLeaving={() => { executionAnchorRef.current = null; session.dispose(); voiceStartRef.current?.stop(); stopCamera(); }} />
         <h1>Guided Brew</h1>
@@ -332,24 +335,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
           : null}
       </section>
 
-      {snapshot.phase === "BREWING" || snapshot.phase === "COMPLETED" ? (
-        <>
-          <div className="running-timers">
-            <div><span>Total elapsed</span><time dateTime={`PT${Math.floor(snapshot.elapsedMs / 1_000)}S`}>{formatDuration(Math.floor(snapshot.elapsedMs / 1_000))}</time></div>
-            <div><span>Stage elapsed</span><time dateTime={`PT${Math.floor(snapshot.stageElapsedMs / 1_000)}S`}>{formatDuration(Math.floor(snapshot.stageElapsedMs / 1_000))}</time></div>
-          </div>
-          <section className="guided-instruction" aria-live="polite">
-            <p className="eyebrow">Current guidance</p>
-            <h2>{snapshot.phase === "COMPLETED" ? "Brew complete" : currentStage?.name}</h2>
-            <p>{guidance}</p>
-            <div className="guided-progress" aria-label={`Stage progress ${Math.round(snapshot.stageProgress * 100)} percent`}><span style={{ width: `${snapshot.stageProgress * 100}%` }} /></div>
-            <span>{Math.min(stageIndex + 1, runtime.stages.length)} / {runtime.stages.length} stages</span>
-          </section>
-          <ol className="guided-stage-list" aria-label="Recipe stage progress">
-            {runtime.stages.map((stage, index) => <li className={stage.completed ? "is-complete" : index === runtime.currentStageIndex ? "is-current" : ""} key={stage.stageId}><span>{stage.completed ? "✓" : index + 1}</span><strong>{stage.name}</strong></li>)}
-          </ol>
-        </>
-      ) : null}
+      {!isSetup && <LiveBrewHud title={brew.recipeSnapshot.title} stage={currentStage?.name ?? sheetCopy.complete} target={brew.recipeSnapshot.steps[stageIndex]?.targetWaterGrams} drain={brew.recipeSnapshot.steps[stageIndex]?.pourMethod === "drain"} instruction={guidance} elapsed={formatDuration(Math.floor(snapshot.elapsedMs/1000))} expected={formatDuration(brew.recipeSnapshot.expectedTimeSeconds.value)} progress={runtime.stages.map((stage,index)=>({ id:stage.stageId,name:stage.name,current:index===stageIndex,completed:stage.completed,duration:runtime.recipe.stages[index]?.targetPourDurationMs,fraction:index===stageIndex?snapshot.stageProgress:0 }))} next={runtime.stages[stageIndex+1]?.name} back={<BrewBackButton brewId={brew.id} onLeaving={() => { executionAnchorRef.current=null; session.dispose(); stopCamera(); }} />} settings={<><button type="button" aria-label={sheetCopy.settings} aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(!settingsOpen)}>☰</button>{settingsOpen && <div className="live-hud-settings"><label><input type="checkbox" checked={speechEnabled} onChange={event=>{setSpeechEnabled(event.target.checked);session.setSpeechEnabled(event.target.checked);}} />{sheetCopy.voice}</label><button type="button" onClick={()=>{chooseTimerVoice();setSettingsOpen(false);}}>{copy.chooseTimerVoice}</button></div>}</>} actions={overrun ? <><button type="button" onClick={()=>decideOverrun(true)}>{copy.finishAndSave}</button><button type="button" onClick={()=>decideOverrun(false)}>{copy.discard}</button></> : snapshot.phase === "COMPLETED" ? completionSaveFailed && <button type="button" onClick={retryCompletion}>{copy.retryCompletion}</button> : <><button type="button" onClick={()=>runtime.state === "paused" ? session.resume(executionNow()) : session.pause(executionNow())}>{runtime.state === "paused" ? sheetCopy.resume : sheetCopy.pause}</button><button className="primary-button" type="button" disabled={runtime.state === "paused" || interruptionFailed} onClick={()=>session.advanceStage(executionNow())}>{brew.recipeSnapshot.steps[stageIndex]?.pourMethod === "drain" ? sheetCopy.drainAction : sheetCopy.nextStage}</button></>} />}
 
       <section className="guided-voice-controls" aria-label="Voice guidance controls">
         <label><input type="checkbox" checked={speechEnabled} onChange={(event) => { setSpeechEnabled(event.target.checked); session.setSpeechEnabled(event.target.checked); }} /> Speak guidance</label>

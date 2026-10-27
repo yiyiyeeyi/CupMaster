@@ -36,12 +36,12 @@ const steps: RecipeStep[] = [
   },
 ];
 
-function setup() {
+function setup(recipeSteps = steps) {
   const voice = new VoiceSpy();
   const runtime = new BrewRuntimeController({
     sessionId: "guided-test",
     mode: "manual",
-    recipe: createBrewRuntimeRecipeDefinition({ recipeId: "v60", recipeName: "Test V60", steps }),
+    recipe: createBrewRuntimeRecipeDefinition({ recipeId: "v60", recipeName: "Test V60", steps: recipeSteps }),
   });
   const completedStages: number[] = [];
   const onCompleted = vi.fn();
@@ -62,6 +62,29 @@ function makeReady(session: GuidedBrewV1Session) {
   session.observePositioning(300, 0.02);
   expect(session.getSnapshot().phase).toBe("READY");
 }
+
+describe("manual drain stage", () => {
+  it("waits without a fixed timeout and only advances after confirmation", () => {
+    const { session, completedStages } = setup([{ ...steps[0], pourMethod: "drain" }, steps[1]]);
+    session.selectMode("timer_voice"); session.start("TOUCH", 0);
+    session.tick(60_000);
+    expect(session.getSnapshot().runtime.currentStageIndex).toBe(0);
+    expect(completedStages).toEqual([]);
+    session.pause(60_000); session.advanceStage(61_000);
+    expect(completedStages).toEqual([]);
+    session.resume(62_000); session.advanceStage(63_000);
+    expect(completedStages).toEqual([0]);
+    expect(session.getSnapshot().runtime.currentStageIndex).toBe(1);
+    session.tick(64_000);
+    expect(completedStages).toEqual([0,1]);
+    expect(session.getSnapshot().phase).toBe("COMPLETED");
+  });
+  it("foreground catchup never auto-completes a drain stage", () => {
+    const { session } = setup([{ ...steps[0], pourMethod: "drain" }, steps[1]]);
+    session.selectMode("timer_voice"); session.start("TOUCH",0); session.catchUp(120_000);
+    expect(session.getSnapshot().runtime.currentStageIndex).toBe(0);
+  });
+});
 
 describe("GuidedBrewV1Session", () => {
   it("can complete by timer and voice without camera positioning or frames", () => {

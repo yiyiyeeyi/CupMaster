@@ -31,7 +31,8 @@ export interface GearGuideItem { id: Id; category: Equipment["category"]; title:
 export interface Bean { id: Id; name: string; roaster?: string; origin?: string; process?: string; roastLevel?: "light" | "medium_light" | "medium" | "medium_dark" | "dark"; notes?: string; }
 export interface RecipeStepGuidanceDetail { id: Id; atSeconds: number; message: string; }
 export interface RecipeStepGuidance { start?: string; end?: string; details?: RecipeStepGuidanceDetail[]; }
-export interface RecipeStep { id: Id; order: number; title: string; targetWaterGrams: number; durationSeconds?: number; pattern?: "center" | "spiral" | "pulse" | "continuous" | "immersion"; instruction: string; guidance?: RecipeStepGuidance; }
+export type PourMethod = "circle" | "center" | "outward" | "inward" | "coin" | "excavate" | "drain";
+export interface RecipeStep { pourMethod?: PourMethod; id: Id; order: number; title: string; targetWaterGrams: number; durationSeconds?: number; pattern?: "center" | "spiral" | "pulse" | "continuous" | "immersion"; instruction: string; guidance?: RecipeStepGuidance; }
 export interface RecipeVersion { id: Id; recipeId: Id; version: number; title: string; description: string; method: Method; author: string; doseGrams: number; totalWaterGrams: number; temperatureCelsius: number; grindDescription: string; dripper: string; expectedTimeSeconds: number; difficulty: RecipeDifficulty; roastSuitability: RoastSuitability[]; steps: RecipeStep[]; createdAt: ISODateTime; }
 export interface Recipe { id: Id; type: RecipeType; currentVersion: RecipeVersion; parentRecipeId?: Id; publishedAt?: ISODateTime; }
 

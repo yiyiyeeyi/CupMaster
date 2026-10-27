@@ -8,8 +8,8 @@ export function BrewResultSummary({ brew, justCompleted, onImpression }: {
   brew: Brew; justCompleted: boolean; onImpression: (value: FlavorOverallImpression) => void;
 }) {
   const snapshot = brew.recipeSnapshot, details = brew.recordDetails;
-  const metric = (label: string, value: number | null, target: number, unit: string) => <div className="summary-row" key={label}>
-    <strong>{label}</strong><span>{value === null ? "—" : `${value}${unit}`}</span><span>{target}{unit}</span>
+  const metric = (label: string, value: number | null, target: number, unit: string) => value === null ? null : <div className="summary-row" key={label}>
+    <strong>{label}</strong><span>{`${value}${unit}`}</span><span>{target}{unit}</span>
     <span>{formatSignedNumber(calculateNumericDifference(value, target), unit)}</span>
   </div>;
   return <>
@@ -20,11 +20,11 @@ export function BrewResultSummary({ brew, justCompleted, onImpression }: {
         {metric(copy.dose, details?.actualDoseGrams ?? null, snapshot.doseGrams.value, "g")}
         {metric(copy.water, details?.actualWaterGrams ?? null, snapshot.totalWaterGrams.value, "g")}
         {metric(copy.temperature, details?.actualTemperatureCelsius ?? null, snapshot.temperatureCelsius.value, "°C")}
-        <div className="summary-row"><strong>{copy.totalTime}</strong>
-          <span>{brew.actualTotalTimeSeconds === null ? "—" : formatDuration(brew.actualTotalTimeSeconds)}</span>
+        {brew.actualTotalTimeSeconds !== null && <div className="summary-row"><strong>{copy.totalTime}</strong>
+          <span>{formatDuration(brew.actualTotalTimeSeconds)}</span>
           <span>{formatDuration(snapshot.expectedTimeSeconds.value)}</span>
-          <span>{brew.actualTotalTimeSeconds === null ? "—" : formatSignedDuration(brew.actualTotalTimeSeconds - snapshot.expectedTimeSeconds.value)}</span>
-        </div>
+          <span>{formatSignedDuration(brew.actualTotalTimeSeconds - snapshot.expectedTimeSeconds.value)}</span>
+        </div>}
       </div><p className="missing-measurements">{copy.missingMeasurements}</p>
     </section> : null}
     <fieldset className="quick-rating"><legend>{copy.quickFeeling} <span>（{copy.optional}）</span></legend><div>

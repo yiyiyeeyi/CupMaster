@@ -11,6 +11,17 @@ function setup(id = "brew-1") { const storage = new MemoryStorage(); const repos
 function latestId(service: BrewService) { const result = service.getLatestInProgressBrew(); if (!result.ok) throw new Error(result.message); return result.value?.id; }
 
 describe("BrewService lifecycle", () => {
+  it("pause is idempotent, preserves Snapshot and resume excludes paused time", () => {
+    const { repository } = setup();
+    new BrewService(repository,{ now:()=> "2026-07-18T00:00:00.000Z" }).startBrewSession("brew-1");
+    const snapshot = repository.getById("brew-1").value?.recipeSnapshot;
+    const pause = new BrewService(repository,{now:()=> "2026-07-18T00:00:10.000Z"});
+    expect(pause.pauseBrewSession("brew-1").ok).toBe(true);
+    expect(pause.pauseBrewSession("brew-1").ok).toBe(true);
+    const resumed = new BrewService(repository,{now:()=> "2026-07-18T00:00:20.000Z"}).resumeBrewSession("brew-1");
+    expect(resumed.ok && resumed.value.accumulatedPauseSeconds).toBe(10);
+    expect(resumed.ok && resumed.value.recipeSnapshot).toEqual(snapshot);
+  });
   it("transitions not_started to in_progress", () => { const { repository } = setup(); const result = new BrewService(repository, { now: () => "2026-07-18T00:00:05.000Z" }).startBrewSession("brew-1"); expect(result.ok && result.value.executionStatus).toBe("in_progress"); });
   it("does not reset startedAt for an in_progress Brew", () => { const { repository } = setup(); new BrewService(repository, { now: () => "2026-07-18T00:00:05.000Z" }).startBrewSession("brew-1"); const result = new BrewService(repository, { now: () => "2026-07-18T00:10:00.000Z" }).startBrewSession("brew-1"); expect(result.ok && result.value.startedAt).toBe("2026-07-18T00:00:05.000Z"); });
   it("returns brew_not_found", () => expect(new BrewService(new LocalBrewRepository(new MemoryStorage())).startBrewSession("missing")).toMatchObject({ ok: false, code: "brew_not_found" }));

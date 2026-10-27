@@ -34,7 +34,7 @@ export function createBrewRuntimeRecipeDefinition(
     id: step.id,
     order: step.order,
     name: step.title,
-    ...(step.durationSeconds !== undefined && { targetPourDurationMs: step.durationSeconds * 1_000 }),
+    ...(step.pourMethod !== "drain" && step.durationSeconds !== undefined && { targetPourDurationMs: step.durationSeconds * 1_000 }),
     autoAdvanceEnabled: true,
     ...(step.guidance !== undefined && { guidance: runtimeGuidance(step) }),
   }));

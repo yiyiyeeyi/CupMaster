@@ -1,0 +1,42 @@
+.live-page.is-live,.guided-brew-page.is-live { display:block; position:relative; background:var(--live-bg-plain); color:var(--live-text); width:100%; max-width:none; min-height:100svh; padding:0; overflow:hidden; }
+body:has(.is-live) .app-shell { padding-bottom:0; max-width:none; }
+.guided-brew-page { width:100%; min-width:0; }
+.guided-brew-page>* { min-width:0; }
+.guided-brew-page .live-topbar { grid-template-columns:44px minmax(0,1fr) 72px; }
+.guided-brew-page .live-topbar h1 { font-size:24px; }
+.guided-brew-page .section-heading { flex-wrap:wrap; }
+.guided-brew-page .guided-voice-controls { grid-template-columns:minmax(0,1fr); }
+.live-hud { min-height:100svh; padding:32px 24px max(32px,env(safe-area-inset-bottom)); position:relative; display:flex; flex-direction:column; justify-content:space-between; z-index:2; background:linear-gradient(transparent 30%,rgba(33,26,22,.86) 100%); }
+.live-hud header { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:start; text-align:center; }
+.live-hud header h1 { font:400 22px/1.2 var(--display); margin:4px 0 8px; overflow-wrap:anywhere; }
+.live-hud header .live-hud-clock { font-size:11px; margin:0; opacity:.7; }
+.live-hud header button,.live-hud header a { min-width:44px; min-height:44px; color:inherit; background:none; border:0; padding:0; }
+.live-hud-focus { padding-top:80px; width:100%; text-align:center; }
+.live-hud-stage { color:var(--live-warm); font-size:12px; margin:0 0 8px; }
+.live-hud-target { font:400 104px/1 var(--display); margin:12px 0; }
+.live-hud-target small { font:300 28px var(--ui); margin-left:4px; }
+.live-hud-drain { font:400 34px/1.35 var(--serif-tc); margin:24px 0; }
+.live-hud-instruction { font-size:15px; line-height:1.7; margin:20px 0 8px; overflow-wrap:anywhere; }
+.live-hud-caption,.live-hud-next { font-size:11px; color:rgba(246,242,234,.65); }
+.live-hud-progress { list-style:none; display:flex; gap:6px; padding:0; margin:32px 0 16px; }
+.live-hud-progress li { height:3px; flex:1; background:rgba(246,242,234,.22); }
+.live-hud-progress li.complete { background:var(--live-text); }
+.live-hud-progress li span { display:block; height:100%; background:var(--live-text); }
+.live-hud-progress li.current span { background:var(--live-warm); }
+.live-hud-stage { animation:hud-stage-in .18s ease-out; }
+@keyframes hud-stage-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .live-hud-stage { animation:none; } }
+.live-hud-controls { display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:24px; }
+.live-hud-controls button { border:.5px solid rgba(246,242,234,.5); background:none; color:var(--live-text); min-height:52px; padding:10px 18px; font-size:13px; }
+.live-hud-controls .primary-button { background:var(--live-text); color:var(--ink); flex:1; }
+.live-hud .running-timers { display:inline; background:none; border:0; padding:0; margin:0; }
+.live-hud .running-timers>div { display:inline; }.live-hud .running-timers>div+div,.live-hud .running-timers span { display:none; }
+.live-hud .running-timers time { display:inline; font:inherit; }
+.guided-brew-page.is-live>.guided-camera-card { position:absolute; inset:0; border:0; padding:0; margin:0; background:var(--live-bg-plain); }
+.guided-brew-page.is-live .guided-camera-preview { position:absolute; inset:0; aspect-ratio:auto; }
+.guided-brew-page.is-live .guided-camera-card>:not(.guided-camera-preview),.guided-brew-page.is-live .guided-camera-state { display:none; }
+.guided-brew-page.is-live>.live-topbar,.guided-brew-page.is-live>.guided-voice-controls,.guided-brew-page.is-live>.guided-actions { display:none; }
+.guided-brew-page.is-live>.notice,.live-page.is-live>.notice { position:relative; z-index:3; background:var(--live-bg-plain); color:var(--live-text); border:0; }
+.live-hud-settings { position:absolute; top:88px; right:24px; padding:18px; background:var(--live-bg-plain); border:.5px solid rgba(246,242,234,.3); text-align:left; max-width:calc(100% - 48px); z-index:5; }
+.live-hud-settings label { display:flex; min-height:44px; gap:12px; align-items:center; font-size:13px; }
+.live-hud-settings button { display:block; min-height:44px; font-size:12px; text-align:left; width:100%; }

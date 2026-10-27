@@ -69,6 +69,18 @@ export class BrewService {
       : { ok: false, code: "persistence_failed", message: written.message, latest: brew };
   }
 
+  pauseBrewSession(brewId: string): BrewOperationResult {
+    const read = this.repository.getById(brewId);
+    if (!read.ok) return { ok:false, code:"persistence_failed", message:read.message };
+    const brew = read.value;
+    if (!brew) return { ok:false, code:"brew_not_found", message:"找不到這筆 Brew。" };
+    if (brew.executionStatus === "paused") return { ok:true, value:brew };
+    if (brew.executionStatus !== "in_progress" || brew.recordStatus !== "draft") return { ok:false, code:"invalid_execution_status", message:"目前無法暫停。", latest:brew };
+    const now = this.now();
+    const written = writeBrewWithPreparationCleanup(this.repository, { ...brew, executionStatus:"paused", pausedAt:now, updatedAt:now }, this.dependencies.preparations);
+    return written.ok ? { ok:true, value:written.value } : { ok:false, code:"persistence_failed", message:written.message, latest:brew };
+  }
+
   resumeBrewSession(brewId: string): BrewOperationResult {
     const read = this.repository.getById(brewId);
     if (!read.ok) return { ok: false, code: "persistence_failed", message: read.message };

@@ -24,7 +24,9 @@ const recipeStepGuidanceSchema = z.object({
   path: ["details"],
 });
 
+export const pourMethodSchema = z.enum(["circle", "center", "outward", "inward", "coin", "excavate", "drain"]);
 const recipeStepSchema = z.object({
+  pourMethod: pourMethodSchema.optional(),
   id: z.string().min(1), order: z.number().int().positive(), title: z.string().min(1),
   targetWaterGrams: z.number().positive(), durationSeconds: z.number().positive().optional(),
   pattern: z.enum(["center", "spiral", "pulse", "continuous", "immersion"]).optional(), instruction: z.string().min(1),
