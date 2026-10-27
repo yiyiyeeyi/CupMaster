@@ -34,3 +34,5 @@ synchronizePreparation 同步以上欄位，儲存與建立前驗證；冰沖缺
 390×844 隔離 QA 瀏覽器實際操作：改粉量連動水量 → 固定水改粉 → 還原 → 自訂磨豆機／24 格 → 自訂濾杯／複選配件 → 冰沖／150g 冰塊 → 每段方式 → 先存起來 → 重讀 → 開始 → 拒絕相機 → 計時語音 → 滴濾手動確認 → 保存 → 再沖一杯。均無水平捲動；截圖在本次 visualizations/batch1-qa/screens-stage3。QA 名稱只存在隔離瀏覽器，不入產品 fixture 或 git。
 
 提交前執行 lint、typecheck、全部測試、webpack production build。已知既有 lint warning 僅 Claude 認領的 layout Google Fonts link。
+
+最終結果：63 檔、922 測試全過；lint／typecheck／webpack build 通過。Production 手機流程通過；方向鍵將粉量 15 改為 15.5，Escape 關閉後焦點回到粉量欄位。實作 commit：6d1cff9。
