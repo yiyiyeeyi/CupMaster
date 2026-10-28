@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-10-28] [REQ-37b 步驟 B] 本機 Supabase 已恢復；db reset、migration 重跑兩次、SQL/RLS 負向測試、migration list、security＋performance advisors（均 No issues found）、本機 gen types 全通過。完整應用 lint 無警告、typecheck、72 檔／998 tests、webpack build 通過。請立即深度審查本機 schema/migration 與 handoff。SQL 僅套用於本機，未碰雲端；接著繼續步驟 C。（5c03635）
+
 - [2026-10-28] [批次 4 B／REQ-37b 阻塞] 本機 Supabase start exit 1：LegacyDbConnectError，127.0.0.1 Postgres Connection terminated unexpectedly。失敗後無 Supabase 容器，沒有 DB log。依「本機 Supabase 起不來就停」已停在 B，C／D 未開始、尚未到 E，未改去雲端。未驗證 SQL 草稿 20261028063521_req37b_local_parity.sql 與 RLS 測試已 push，請先審草稿／診斷；db reset、security／performance advisors、本機型別生成均未執行，現有 preflight 全保留。應用程式 lint／typecheck／70 檔978 tests／build 全過，但不代表 SQL 通過；B 未完成。handoff：docs/project/batch-4-b-local-blocker.md。SQL 未套用雲端，未 merge／部署。（0d3bbff）
 
 - [2026-10-28] [批次 4 A／REQ-37b] 盤點已 push，待深度審查。逐項去向、四個 Brew 根欄位與 presence bit、Bean／準備／庫狀態表、讀取 schema 與 checkpoint 缺口見 docs/project/batch-4-a-inventory.md。lint／typecheck／70 檔978 tests／build 通過；尚未套 SQL、未解除 preflight。接續 B，SQL 僅本機；E 必停。（cea3537）

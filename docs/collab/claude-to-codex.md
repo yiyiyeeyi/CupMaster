@@ -233,11 +233,11 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 - [x] 檢查雲端讀取端（remote repositories 的 zod）是否用了會擋新欄位的嚴格 schema；雲端讀取一律用「只驗形狀」的儲存 schema（同批次 2 刻度的教訓），不可因登錄表或新規則讓舊雲端資料讀不到。（cea3537）
 
 ### 步驟 B：SQL migration（只寫檔、只在本機套用）
-- [x] 新增 `supabase/migrations/20261028063521_req37b_local_parity.sql`。新表都有 owner FK、RLS、revision/timestamps、updated_at trigger、tombstones、owner索引。（2026-10-28 本機驗證）
-- [x] brews.bean_id nullable，複合 owner FK 保護跨帳號參照；Bean 使用軟刪除，不 cascade 刪 Brew。（2026-10-28 本機驗證）
-- [x] 只新增欄位／表，migration 重跑兩次無錯。（2026-10-28 本機驗證）
-- [x] 本機 db reset 成功；security／performance advisors 均 No issues found；由本機生成 `src/types/database.types.ts`。（2026-10-28 本機驗證）
-- [x] 本機堆疊第一輪恢復成功；停止、volume、excluded port、start --debug 均依清單完成，不需第二輪；未碰雲端。（2026-10-28）
+- [x] 新增 `supabase/migrations/20261028063521_req37b_local_parity.sql`。新表都有 owner FK、RLS、revision/timestamps、updated_at trigger、tombstones、owner索引。（5c03635）
+- [x] brews.bean_id nullable，複合 owner FK 保護跨帳號參照；Bean 使用軟刪除，不 cascade 刪 Brew。（5c03635）
+- [x] 只新增欄位／表，migration 重跑兩次無錯。（5c03635）
+- [x] 本機 db reset 成功；security／performance advisors 均 No issues found；由本機生成 `src/types/database.types.ts`。（5c03635）
+- [x] 本機堆疊第一輪恢復成功；停止、volume、excluded port、start --debug 均依清單完成，不需第二輪；未碰雲端。（5c03635）
 
 ### 步驟 C：mapper＋雲端 repository
 - [ ] 本機 → 雲端 → 本機 的 round-trip 測試：做一筆「每個選填欄位都有值」的完整 Brew（刻度三種格式各一、豆子快照全欄位、beanId、冰沖＋冰量、配件、每段 pourMethod、stars／aroma／tasteTags、無 overallImpression、appliedAdjustment、sourcePreparationId）、一包全欄位豆子（含已刪除 tombstone）、一筆已存準備，經 mapper 後必須 deep equal。
