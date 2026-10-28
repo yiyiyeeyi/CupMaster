@@ -1,7 +1,8 @@
 -- REQ-37b local parity. Local Supabase only until separate cloud approval.
--- UNVERIFIED DRAFT: local stack startup failed before reset/advisors/type generation.
+-- Verified on local Supabase with reset, two idempotent re-runs, SQL tests, and advisors.
 -- Do not apply to any cloud project. See docs/project/batch-4-b-local-blocker.md.
 -- Payloads are stored contracts, not model-registry/input validation rules.
+-- Local Bean tombstones retain their full BeanRecord, including deletedAt and payload.
 create table if not exists public.beans (
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
@@ -31,7 +32,7 @@ create table if not exists public.brew_preparations (
 );
 
 -- Preserves local library envelope metadata, including preparation redirects,
--- lineage, deletedIds and raw migration backups; never reinterprets that JSON.
+-- lineage, deletedIds and legacyImportReviewed only. Raw backups stay local.
 create table if not exists public.library_states (
   user_id uuid primary key references auth.users(id) on delete cascade,
   payload jsonb not null,
@@ -53,6 +54,7 @@ do $$
 begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.brews'::regclass and conname = 'brews_owner_bean_fk') then
     alter table public.brews add constraint brews_owner_bean_fk
+      -- Deferred checks do not span PostgREST requests; push Beans before Brews.
       foreign key (user_id, bean_id) references public.beans(user_id, id)
       on delete restrict deferrable initially deferred;
   end if;

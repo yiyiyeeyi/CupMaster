@@ -1,5 +1,5 @@
 -- Disposable local stack only: supabase db query --local --file <this file>.
--- Not executed yet: local startup blocked. This is a verification draft.
+-- Executed successfully on local Supabase after reset; transaction rolls back every fixture.
 -- All fixtures and writes are rolled back, including local Auth users.
 begin;
 insert into auth.users(id) values
@@ -20,6 +20,18 @@ set constraints brews_owner_bean_fk immediate;
 do $$
 declare n integer;
 begin
+  begin
+    insert into public.beans(user_id,id,payload) values (auth.uid(),'id-mismatch','{"id":"another"}');
+    raise exception 'Bean payload identity mismatch accepted';
+  exception when check_violation then null; end;
+  begin
+    insert into public.brew_preparations(user_id,id,payload) values (auth.uid(),'id-mismatch','{"id":"another"}');
+    raise exception 'Preparation payload identity mismatch accepted';
+  exception when check_violation then null; end;
+  begin
+    insert into public.brew_preparations(user_id,id,payload,deleted_at) values (auth.uid(),'invalid-null',null,null);
+    raise exception 'Active preparation accepted null payload';
+  exception when check_violation then null; end;
   select count(*) into n from public.beans;
   if n <> 1 then raise exception 'RLS exposed another owner Bean'; end if;
   if exists(select 1 from public.brew_preparations) or exists(select 1 from public.library_states) then

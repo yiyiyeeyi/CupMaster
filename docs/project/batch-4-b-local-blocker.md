@@ -1,5 +1,19 @@
 # 批次 4 B：本機 Supabase 啟動阻塞
 
+## 解除阻塞後的最新狀態（2026-10-28）
+
+本機 Supabase 已在第一輪恢復；先前「B 未完成」是當時狀態。批次 B 的本機驗證現已完成：
+
+- `npm exec --offline -- supabase db reset --local --yes` 成功，完整重播 core、execution timing、REQ-37b migration 與 seed。
+- reset 後第一次 SQL CLI 連線遇到短暫 `LegacyDbConnectError`。立即擷取時 Postgres 為 healthy，DB log 已顯示 migration 完整執行；`pg_isready` 通過，後續本機 `select 1` 成功。多語句 SQL 檔由 Supabase `db query --file` 以 prepared statement 執行會拒絕多個命令，因此改用 `docker exec` 的本機 psql 執行 migration 兩次，均成功且冪等。
+- `supabase/tests/req37b_local_parity.sql` 本機執行成功：owner/RLS、跨帳號複合 FK、tombstone、無 hard-delete、payload id/null 約束均通過並 rollback。
+- `supabase db advisors --local --type security` 與 `--type performance` 均為 **No issues found**。
+- `supabase migration list --local` 顯示三筆版本均已套用；只讀本機 migration metadata。
+- `supabase gen types --local --lang typescript --schema public` 成功，以本機資料庫生成 `src/types/database.types.ts`；新表及 Brew parity 欄位均存在。原始產出先寫至工作區外 QA 暫存目錄，再複製進 repo。
+- 這些 SQL 操作全部指向本機容器 `supabase_db_CupMaster`；沒有呼叫 linked/remote CLI 或 Supabase 雲端工具。Migration 仍不得套用到雲端，等待 Claude SQL 深度審查與 yiyi 明確授權。
+
+線 2 的 mapper、repository、gateway、round-trip/fake-client 測試及 profile preference merge 正在同一工作步驟中完成；目前 fail-closed preflight 尚未解除。
+
 狀態：**B 未完成，C／D 未開始，尚未到 E**。依 Claude 協作板 2026-10-28 的明確指示「本機 Supabase 起不來就停下來」，啟動失敗後停止後續實作；沒有改用雲端。
 
 ## 已做與可審查的草稿
@@ -48,3 +62,22 @@ Connection terminated unexpectedly
 草稿交接前另跑一輪應用程式檢查：lint 無警告、typecheck、70 檔／978 tests、npm run build 全過。這些檢查未執行 SQL，資料庫驗證結果仍全部為上表的「未執行」。
 
 恢復本機堆疊後才可接續 B 的 reset、advisors、RLS 與型別生成，再依序 C、D；E 仍是獨立停止關卡。**SQL 未套用雲端 ouniwzdxbcrektzynkak；未 merge main、未部署。**
+
+## 解除阻塞線 1（2026-10-28）
+
+**第 1 輪成功，未使用第 2 輪額度。** 這一節更新前述「尚未啟動」狀態；B 的 reset／advisors／測試／型別生成須由主流程另行完成，不能僅因 start 成功就把 B 全部打勾。
+
+- `npm exec --offline -- supabase stop --no-backup` 成功；CLI 顯示 project_id_filter=CupMaster、backup=false，未使用 --all，未操作其他專案。
+- `docker volume ls` 與 CupMaster filter 均未發現 CupMaster／Supabase 舊具名 volume，所以沒有額外執行 volume rm，也未動其他專案 volumes。不能宣稱已證明原阻塞由舊 Postgres volume 造成。
+- `netsh interface ipv4 show excludedportrange protocol=tcp` 沒有涵蓋 54320–54329 的區間；最近區間是 53642–53741 與 58501–58600。不需改本機埠，supabase/config.toml 未修改。
+- 第 1 輪執行與前次相同 exclude，另加 --debug：
+
+```powershell
+npm exec --offline -- supabase start --debug --exclude realtime,storage-api,imgproxy,mailpit,studio,edge-runtime,logflare,vector,supavisor
+```
+
+命令 exit 0。Postgres container 的 log 有 `database system is ready to accept connections`；啟動流程依序顯示三筆 migration 與 seed，包含 `20261028063521_req37b_local_parity.sql`。這是 CLI start 的自動初始化，線 1 沒有另行執行 SQL、reset、advisors 或 gen types。
+
+最終本機 containers：supabase_db_CupMaster healthy、supabase_auth_CupMaster healthy、supabase_kong_CupMaster healthy、supabase_pg_meta_CupMaster healthy、supabase_rest_CupMaster Up。API 使用 http://127.0.0.1:54321，Postgres 使用 127.0.0.1:54322（container 5432 對應 host 54322）。
+
+原始 debug 與啟動中 DB log 留在工作區外 QA 目錄：`batch4-unblock-start-1.log`、`batch4-unblock-db-live-1.log`。沒有把 credentials 或 debug 全文提交進 repo。未失敗，故不需要第 2 輪或失敗後的 log 檔；沒有開 Supabase branch、沒有碰任何雲端專案。

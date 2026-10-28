@@ -7,13 +7,68 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.17"
-  }
   public: {
     Tables: {
+      beans: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          payload: Json
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id: string
+          payload: Json
+          revision?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          payload?: Json
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      brew_preparations: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          payload: Json | null
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id: string
+          payload?: Json | null
+          revision?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          payload?: Json | null
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       brews: {
         Row: {
           accumulated_pause_seconds: number
@@ -22,6 +77,9 @@ export type Database = {
           analysis: Json | null
           analysis_attempt: Json | null
           analysis_status: string
+          applied_adjustment: Json | null
+          applied_adjustment_present: boolean
+          bean_id: string | null
           brew_plan: Json
           completed_at: string | null
           created_at: string
@@ -34,6 +92,7 @@ export type Database = {
           feedback_status: string
           flavor_feedback: Json | null
           id: string
+          legacy_preparation_id: string | null
           paused_at: string | null
           quick_rating: string | null
           recipe_snapshot: Json
@@ -43,6 +102,7 @@ export type Database = {
           source_analysis_id: string | null
           source_brew_id: string | null
           source_fingerprint: string | null
+          source_preparation_id: string | null
           source_recipe_id: string
           source_recommendation_id: string | null
           source_suggested_plan_id: string | null
@@ -60,6 +120,9 @@ export type Database = {
           analysis?: Json | null
           analysis_attempt?: Json | null
           analysis_status: string
+          applied_adjustment?: Json | null
+          applied_adjustment_present?: boolean
+          bean_id?: string | null
           brew_plan: Json
           completed_at?: string | null
           created_at: string
@@ -72,6 +135,7 @@ export type Database = {
           feedback_status: string
           flavor_feedback?: Json | null
           id: string
+          legacy_preparation_id?: string | null
           paused_at?: string | null
           quick_rating?: string | null
           recipe_snapshot: Json
@@ -81,6 +145,7 @@ export type Database = {
           source_analysis_id?: string | null
           source_brew_id?: string | null
           source_fingerprint?: string | null
+          source_preparation_id?: string | null
           source_recipe_id: string
           source_recommendation_id?: string | null
           source_suggested_plan_id?: string | null
@@ -98,6 +163,9 @@ export type Database = {
           analysis?: Json | null
           analysis_attempt?: Json | null
           analysis_status?: string
+          applied_adjustment?: Json | null
+          applied_adjustment_present?: boolean
+          bean_id?: string | null
           brew_plan?: Json
           completed_at?: string | null
           created_at?: string
@@ -110,6 +178,7 @@ export type Database = {
           feedback_status?: string
           flavor_feedback?: Json | null
           id?: string
+          legacy_preparation_id?: string | null
           paused_at?: string | null
           quick_rating?: string | null
           recipe_snapshot?: Json
@@ -119,6 +188,7 @@ export type Database = {
           source_analysis_id?: string | null
           source_brew_id?: string | null
           source_fingerprint?: string | null
+          source_preparation_id?: string | null
           source_recipe_id?: string
           source_recommendation_id?: string | null
           source_suggested_plan_id?: string | null
@@ -131,6 +201,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "brews_owner_bean_fk"
+            columns: ["user_id", "bean_id"]
+            isOneToOne: false
+            referencedRelation: "beans"
+            referencedColumns: ["user_id", "id"]
+          },
+          {
             foreignKeyName: "brews_source_suggested_plan_fk"
             columns: ["source_suggested_plan_id", "user_id"]
             isOneToOne: false
@@ -138,6 +215,33 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
         ]
+      }
+      library_states: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          payload: Json
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          payload: Json
+          revision?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          payload?: Json
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -289,12 +393,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -318,11 +422,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -343,11 +447,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -368,11 +472,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -385,11 +489,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

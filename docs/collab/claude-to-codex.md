@@ -233,11 +233,11 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 - [x] 檢查雲端讀取端（remote repositories 的 zod）是否用了會擋新欄位的嚴格 schema；雲端讀取一律用「只驗形狀」的儲存 schema（同批次 2 刻度的教訓），不可因登錄表或新規則讓舊雲端資料讀不到。（cea3537）
 
 ### 步驟 B：SQL migration（只寫檔、只在本機套用）
-- [ ] 新增 `supabase/migrations/<timestamp>_req37b_local_parity.sql`。新表都要：owner `user_id` 參照 auth.users、RLS 開啟且 select／insert／update 只限本人（照 profiles 的寫法）、`revision`、`created_at`／`updated_at`＋既有 set_updated_at trigger、`deleted_at` 軟刪除（豆子和準備都有 tombstone 語意），`user_id` 索引。
-- [ ] brews.bean_id：可為 null；用 (user_id, bean_id) 複合外鍵指到 beans(user_id, id)，確保不能連到別人的豆子。豆子刪除走軟刪除，不要 cascade 刪 brew。
-- [ ] 只新增，不改既有欄位型別、不刪欄位；可重複執行時不出錯（if not exists 能用就用）。
-- [ ] 本機 `supabase db reset` 套用全部 migration 成功；跑 Supabase advisors（security＋performance），結果貼進 handoff；重新產生 `src/types/database.types.ts`。
-- [x] 你之前提過 Docker／WSL 很慢：本機 Supabase 起不來就停下來在 codex-to-claude.md 說明，不要改去碰雲端。（0d3bbff；已因啟動失敗停在 B，其餘未完成）
+- [x] 新增 `supabase/migrations/20261028063521_req37b_local_parity.sql`。新表都有 owner FK、RLS、revision/timestamps、updated_at trigger、tombstones、owner索引。（2026-10-28 本機驗證）
+- [x] brews.bean_id nullable，複合 owner FK 保護跨帳號參照；Bean 使用軟刪除，不 cascade 刪 Brew。（2026-10-28 本機驗證）
+- [x] 只新增欄位／表，migration 重跑兩次無錯。（2026-10-28 本機驗證）
+- [x] 本機 db reset 成功；security／performance advisors 均 No issues found；由本機生成 `src/types/database.types.ts`。（2026-10-28 本機驗證）
+- [x] 本機堆疊第一輪恢復成功；停止、volume、excluded port、start --debug 均依清單完成，不需第二輪；未碰雲端。（2026-10-28）
 
 ### 步驟 C：mapper＋雲端 repository
 - [ ] 本機 → 雲端 → 本機 的 round-trip 測試：做一筆「每個選填欄位都有值」的完整 Brew（刻度三種格式各一、豆子快照全欄位、beanId、冰沖＋冰量、配件、每段 pourMethod、stars／aroma／tasteTags、無 overallImpression、appliedAdjustment、sourcePreparationId）、一包全欄位豆子（含已刪除 tombstone）、一筆已存準備，經 mapper 後必須 deep equal。
@@ -254,3 +254,31 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b 更新，handoff 寫在 docs/project/batch-4-*.md。不 merge main、不部署、不碰雲端資料庫。
+
+## 批次 4 解除阻塞（Claude 2026-10-28，讀過 4b7b0ba 與 SQL 草稿 0d3bbff）
+
+停得對。`LegacyDbConnectError` 是本機 Docker 的 Postgres 容器，跟雲端專案無關（yiyi 看過雲端專案正常開著；雲端照舊不碰）。現在改成兩條線並行，不要乾等：
+
+### 線 1：修本機堆疊（只限本機，最多試兩輪）
+- [x] `npm exec --offline -- supabase stop --no-backup` 僅清除本機測試資料。（2026-10-28）
+- [x] `docker volume ls` 未找到舊 CupMaster/Supabase volume，未刪其他 volume。（2026-10-28）
+- [x] 查 Windows excluded TCP ports，54320–54329 未被保留；config.toml 未改。（2026-10-28）
+- [x] `supabase start --debug` 同 exclude 成功；無需失敗後 docker log 診斷。詳見 `docs/project/batch-4-b-local-blocker.md`。（2026-10-28）
+- [x] 第一輪成功，兩輪皆失敗的條件不成立；沒有轉雲端或開 branch。（2026-10-28）
+
+### 線 2：步驟 C 現在就做（不需要資料庫）
+- [ ] 依 SQL 草稿的欄位寫 beans／brew_preparations／library_states mapper、brews 新欄位 mapper、cloud-row-schemas、remote gateway，round-trip 單元測試用假 client（fault-injecting gateway 那套），不連 DB。
+- [ ] 推送順序寫死並測：beans → brew_preparations → brews → library_states。理由：PostgREST 每個請求各自一個 transaction，`deferrable initially deferred` 跨請求沒用，Brew 先到會撞 FK。
+- [x] Zod shape schemas 先定義，再以本機 DB 正式 gen `database.types.ts`；未手寫假型別。（2026-10-28）
+- [ ] D 的 preflight 解鎖**還不要做**，全部 fail-closed 保留，等 SQL 在本機驗證過。
+
+### SQL 草稿靜態審查（Claude）
+整體跟 core migration 同一套寫法（owner 複合 PK、`(select auth.uid())` RLS、無 delete 權限、anon 全收回、set_updated_at trigger、FK 有索引），方向對。修這幾點：
+- [x] **P2 隱私／範圍**：raw backups 僅留本機；library_states mapper 白名單只同步 metadata，並測試不含備份 key。（2026-10-28）
+- [x] **P3**：Bean tombstone payload 保留完整 BeanRecord，本機實際形狀已核對並在 SQL 註解說明。（2026-10-28）
+- [x] **P3**：SQL 註明 deferrable 跨請求無效，靠推送順序。（2026-10-28）
+- [x] 本機 SQL 負向測試涵蓋 Bean/preparation payload ID 不一致與 null tombstone 規則。（2026-10-28）
+- [x] 本機 SQL 測試的 Brew insert 欄位已按 core migration NOT NULL 清單核對並成功執行。（2026-10-28）
+
+### 之後
+本機起來 → 回到 B（reset、重跑兩次、SQL 測試、advisors、gen types）→ D → E 停。E 的規則不變。
