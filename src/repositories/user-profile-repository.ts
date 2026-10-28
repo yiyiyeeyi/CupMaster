@@ -1,7 +1,8 @@
 import type { UserExperienceLevel, UserNeed, UserProfile } from "@/domain";
+import type { Json } from "@/types/database.types";
 
 export interface OnboardingDraft { displayName: string; experienceLevel?: UserExperienceLevel; selectedNeeds: UserNeed[]; }
-export interface StoredUserProfile { profile: UserProfile; selectedNeeds: UserNeed[]; onboardingCompleted: boolean; }
+export interface StoredUserProfile { profile: UserProfile; selectedNeeds: UserNeed[]; onboardingCompleted: boolean; preferences?: Json; }
 export type ProfileLoadResult = { status: "found"; value: StoredUserProfile } | { status: "empty" } | { status: "recovered"; message: string };
 export type ProfileSaveResult = { ok: true; value: StoredUserProfile } | { ok: false; message: string };
 

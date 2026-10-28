@@ -3,8 +3,10 @@ import { brewAnalysisAttemptSchema, brewAnalysisSchema } from "@/domain/brew-ana
 import { brewRecordDetailsSchema, experienceLevelSchema, flavorFeedbackSchema, userNeedSchema } from "@/domain/schemas";
 import { suggestedPlanAdjustmentSchema } from "@/domain/suggested-plan";
 import { brewPlanSchema, brewRecipeSnapshotSchema, brewStageResultSchema } from "@/data/local-brew-schema";
+import {appliedBrewAdjustmentSchema} from "@/domain/brew-preparation";
+import type { Json } from "@/types/database.types";
 
-const timestamp = z.string().datetime();
+const timestamp = z.iso.datetime({offset:true}).transform(value=>new Date(value).toISOString());
 const nullableTimestamp = timestamp.nullable();
 const revision = z.number().int().min(1);
 const activeRow = { revision, created_at: timestamp, updated_at: timestamp, deleted_at: nullableTimestamp };
@@ -16,6 +18,8 @@ export const profileRowSchema = z.object({
 });
 
 export const brewRowSchema = z.object({
+  bean_id:z.string().nullable().optional(),source_preparation_id:z.string().nullable().optional(),legacy_preparation_id:z.string().nullable().optional(),
+  applied_adjustment:appliedBrewAdjustmentSchema.nullable().optional(),applied_adjustment_present:z.boolean().optional(),
   id: z.string().min(1), user_id: z.string().uuid(), source_recipe_id: z.string().min(1),
   execution_status: z.enum(["not_started", "in_progress", "paused", "completed", "abandoned"]),
   record_status: z.enum(["draft", "saved", "archived"]),
@@ -39,6 +43,15 @@ export const brewRowSchema = z.object({
   if (row.source_type === "suggested_plan" && !row.source_suggested_plan_id) context.addIssue({ code: "custom", path: ["source_suggested_plan_id"], message: "Suggested Plan source requires its Plan ID." });
   if (row.source_type === "recipe" && row.suggested_plan_handoff) context.addIssue({ code: "custom", path: ["suggested_plan_handoff"], message: "Recipe source cannot contain Plan handoff." });
 });
+
+/** Runtime contracts until local gen types is available; never edit generated types by hand. */
+export const brewParityColumnsSchema=z.object({bean_id:z.string().nullable(),source_preparation_id:z.string().nullable(),legacy_preparation_id:z.string().nullable(),applied_adjustment:z.json().nullable().transform(value=>value as Json|null),applied_adjustment_present:z.boolean()});
+export const storedBeanSchema=z.object({id:z.string().min(1),name:z.string().optional(),roaster:z.string().optional(),origin:z.string().optional(),process:z.string().optional(),roastLevel:z.string().optional(),farm:z.string().optional(),variety:z.string().optional(),roastDate:z.string().optional(),cropYear:z.string().optional(),altitude:z.string().optional(),agtron:z.number().finite().optional(),blend:z.string().optional(),flavors:z.array(z.string()).optional(),legacyKeys:z.array(z.string()).optional(),unlinkPending:z.boolean().optional(),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),deletedAt:z.string().datetime().optional()});
+export const storedPreparationSchema=z.object({id:z.string(),beanId:z.string().optional(),snapshot:brewRecipeSnapshotSchema,plan:brewPlanSchema,sourceBrewId:z.string().nullable(),appliedAdjustment:appliedBrewAdjustmentSchema.nullable(),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),legacyPlanId:z.string().optional(),legacyBrewId:z.string().optional()});
+export const libraryStatePayloadSchema=z.object({legacyImportReviewed:z.boolean(),redirects:z.record(z.string(),z.string()),lineage:z.record(z.string(),z.object({sourceBrewId:z.string().nullable(),appliedAdjustment:appliedBrewAdjustmentSchema.nullable()})),deletedIds:z.array(z.string())});
+export const beanRowSchema=z.object({user_id:z.string().uuid(),id:z.string().min(1),payload:storedBeanSchema,...activeRow}).refine(row=>row.id===row.payload.id,"Bean payload ID mismatch.");
+export const preparationRowSchema=z.object({user_id:z.string().uuid(),id:z.string().min(1),payload:storedPreparationSchema.nullable(),...activeRow}).refine(row=>row.payload?row.payload.id===row.id:row.deleted_at!==null,"Invalid preparation payload.");
+export const libraryStateRowSchema=z.object({user_id:z.string().uuid(),payload:libraryStatePayloadSchema,...activeRow});
 
 export const suggestedPlanRowSchema = z.object({
   id: z.string().min(1), user_id: z.string().uuid(), source_brew_id: z.string().min(1),

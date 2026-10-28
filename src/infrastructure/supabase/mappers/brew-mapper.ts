@@ -2,14 +2,18 @@ import { z } from "zod";
 import type { Brew } from "@/domain";
 import { brewPersistenceSchema } from "@/data/local-brew-schema";
 import type { Json, Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
-import { brewRowSchema, CloudMappingError, parseActiveRow } from "../cloud-row-schemas";
+import { brewRowSchema, CloudMappingError, parseActiveRow,brewParityColumnsSchema } from "../cloud-row-schemas";
 
 const json = (value: unknown): Json => z.json().parse(value);
+type BrewParityColumns = z.infer<typeof brewParityColumnsSchema>;
+type BrewInsert = Omit<TablesInsert<"brews">, keyof BrewParityColumns> & BrewParityColumns;
+type BrewUpdate = Omit<TablesUpdate<"brews">, keyof BrewParityColumns> & Partial<BrewParityColumns>;
 export interface MappedBrew { entity: Brew; revision: number; }
 
-export function toBrewInsert(userId: string, brew: Brew, revision = 1): TablesInsert<"brews"> {
+export function toBrewInsert(userId: string, brew: Brew, revision = 1): BrewInsert {
   const value = brewPersistenceSchema.parse(brew);
   return {
+    bean_id:value.beanId??null, source_preparation_id:value.sourcePreparationId??null, legacy_preparation_id:value.legacyPreparationId??null, applied_adjustment:value.appliedAdjustment==null?null:json(value.appliedAdjustment), applied_adjustment_present:value.appliedAdjustment!==undefined,
     id: value.id, user_id: userId, source_recipe_id: value.sourceRecipeId,
     execution_status: value.executionStatus, record_status: value.recordStatus,
     feedback_status: value.feedbackStatus, analysis_status: value.analysisStatus,
@@ -33,8 +37,8 @@ export function toBrewInsert(userId: string, brew: Brew, revision = 1): TablesIn
   };
 }
 
-export function toBrewUpdate(brew: Brew, revision: number): TablesUpdate<"brews"> {
-  const update: TablesUpdate<"brews"> = { ...toBrewInsert("00000000-0000-4000-8000-000000000000", brew, revision) };
+export function toBrewUpdate(brew: Brew, revision: number): BrewUpdate {
+  const update: BrewUpdate = { ...toBrewInsert("00000000-0000-4000-8000-000000000000", brew, revision) };
   delete update.id;
   delete update.user_id;
   return update;
@@ -43,6 +47,7 @@ export function toBrewUpdate(brew: Brew, revision: number): TablesUpdate<"brews"
 export function fromBrewRow(input: Tables<"brews"> | unknown): MappedBrew {
   const row = parseActiveRow(brewRowSchema, input);
   const parsed = brewPersistenceSchema.safeParse({
+    ...(row.bean_id!=null&&{beanId:row.bean_id}), ...(row.source_preparation_id!=null&&{sourcePreparationId:row.source_preparation_id}), ...(row.legacy_preparation_id!=null&&{legacyPreparationId:row.legacy_preparation_id}), ...((row.applied_adjustment_present||row.applied_adjustment!=null)&&{appliedAdjustment:row.applied_adjustment??null}),
     id: row.id, sourceRecipeId: row.source_recipe_id, brewPlan: row.brew_plan,
     recipeSnapshot: row.recipe_snapshot, executionStatus: row.execution_status,
     recordStatus: row.record_status, feedbackStatus: row.feedback_status,
