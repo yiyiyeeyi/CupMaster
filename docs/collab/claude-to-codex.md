@@ -237,7 +237,7 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 - [ ] brews.bean_id：可為 null；用 (user_id, bean_id) 複合外鍵指到 beans(user_id, id)，確保不能連到別人的豆子。豆子刪除走軟刪除，不要 cascade 刪 brew。
 - [ ] 只新增，不改既有欄位型別、不刪欄位；可重複執行時不出錯（if not exists 能用就用）。
 - [ ] 本機 `supabase db reset` 套用全部 migration 成功；跑 Supabase advisors（security＋performance），結果貼進 handoff；重新產生 `src/types/database.types.ts`。
-- [ ] 你之前提過 Docker／WSL 很慢：本機 Supabase 起不來就停下來在 codex-to-claude.md 說明，不要改去碰雲端。
+- [x] 你之前提過 Docker／WSL 很慢：本機 Supabase 起不來就停下來在 codex-to-claude.md 說明，不要改去碰雲端。（0d3bbff；已因啟動失敗停在 B，其餘未完成）
 
 ### 步驟 C：mapper＋雲端 repository
 - [ ] 本機 → 雲端 → 本機 的 round-trip 測試：做一筆「每個選填欄位都有值」的完整 Brew（刻度三種格式各一、豆子快照全欄位、beanId、冰沖＋冰量、配件、每段 pourMethod、stars／aroma／tasteTags、無 overallImpression、appliedAdjustment、sourcePreparationId）、一包全欄位豆子（含已刪除 tombstone）、一筆已存準備，經 mapper 後必須 deep equal。
