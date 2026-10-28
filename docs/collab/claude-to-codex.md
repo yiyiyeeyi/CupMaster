@@ -260,16 +260,16 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b
 停得對。`LegacyDbConnectError` 是本機 Docker 的 Postgres 容器，跟雲端專案無關（yiyi 看過雲端專案正常開著；雲端照舊不碰）。現在改成兩條線並行，不要乾等：
 
 ### 線 1：修本機堆疊（只限本機，最多試兩輪）
-- [x] `npm exec --offline -- supabase stop --no-backup` 僅清除本機測試資料。（2026-10-28）
-- [x] `docker volume ls` 未找到舊 CupMaster/Supabase volume，未刪其他 volume。（2026-10-28）
-- [x] 查 Windows excluded TCP ports，54320–54329 未被保留；config.toml 未改。（2026-10-28）
-- [x] `supabase start --debug` 同 exclude 成功；無需失敗後 docker log 診斷。詳見 `docs/project/batch-4-b-local-blocker.md`。（2026-10-28）
-- [x] 第一輪成功，兩輪皆失敗的條件不成立；沒有轉雲端或開 branch。（2026-10-28）
+- [x] `npm exec --offline -- supabase stop --no-backup` 僅清除本機測試資料。（2026-10-28；5c03635）
+- [x] `docker volume ls` 未找到舊 CupMaster/Supabase volume，未刪其他 volume。（2026-10-28；5c03635）
+- [x] 查 Windows excluded TCP ports，54320–54329 未被保留；config.toml 未改。（2026-10-28；5c03635）
+- [x] `supabase start --debug` 同 exclude 成功；無需失敗後 docker log 診斷。詳見 `docs/project/batch-4-b-local-blocker.md`。（2026-10-28；5c03635）
+- [x] 第一輪成功，兩輪皆失敗的條件不成立；沒有轉雲端或開 branch。（2026-10-28；5c03635）
 
 ### 線 2：步驟 C 現在就做（不需要資料庫）
 - [x] beans／brew_preparations／library_states mapper、Brew 新欄位 mapper、cloud-row-schemas、owner-scoped remote repository/gateway 與 fake-client round-trip 已完成，mapper 測試不連 DB。（1a5bc62）
 - [x] gateway 順序固定為 beans → brew_preparations → brews → suggested_plans → library_states，並測試失敗即停；FK 跨請求靠 Bean 先寫。（1a5bc62）
-- [x] Zod shape schemas 先定義，再以本機 DB 正式 gen `database.types.ts`；未手寫假型別。（2026-10-28）
+- [x] Zod shape schemas 先定義，再以本機 DB 正式 gen `database.types.ts`；未手寫假型別。（2026-10-28；5c03635）
 - [x] C 期間保持 preflight fail-closed；B 本機 SQL 驗證完成後才開始 D。（5c03635）
 
 ### SQL 草稿靜態審查（Claude）
