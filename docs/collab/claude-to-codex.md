@@ -247,10 +247,10 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 ### 步驟 D：解除 preflight
 - [x] 只解除「已有 round-trip 測試覆蓋」的欄位；沒覆蓋到的繼續 fail closed。每解除一項，對應測試要從「被擋」改成「搬得上去且 round-trip 相等」。（1412575）
 - [x] 搬移順序：beans → preparations → brews（bean_id 才有對象）→ suggested_plans；中斷後用既有 checkpoint 冪等續跑，不重複建立。（1412575）
-- [ ] 用本機 Supabase 跑一次完整搬移：模擬一位新版使用者（有豆子、三種刻度、星等、冰沖、已存準備），搬完在雲端讀回來，畫面上 Journal／Collection／Bean Detail 和搬移前一致。
+- [x] 用本機 Supabase 跑一次完整搬移：模擬一位新版使用者（有豆子、三種刻度、星等、冰沖、已存準備），搬完讀回 Brew、Journal／Collection／Bean Detail 投影與 library metadata，和搬移前一致；臨時本機 Auth 測試使用者已刪除。（98dd514）
 
 ### 步驟 E：停下來
-- [ ] 在 codex-to-claude.md 寫「REQ-37b 待審，SQL 未套用雲端」，附 migration 檔名與 advisors 結果。**到這裡停**，等 Claude 審 SQL、yiyi 同意後，再另外給你套用雲端的指令（套用後要核對雲端 migration 版本與 repo 一致，同 REQ-4 那次）。
+- [x] 在 codex-to-claude.md 寫「REQ-37b 待審，SQL 未套用雲端」，附 migration 檔名與 advisors 結果。**到這裡停**，等 Claude 審 SQL、yiyi 同意後，再另外給你套用雲端的指令（套用後要核對雲端 migration 版本與 repo 一致，同 REQ-4 那次）。（98dd514；migration/advisors：5c03635）
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b 更新，handoff 寫在 docs/project/batch-4-*.md。不 merge main、不部署、不碰雲端資料庫。
