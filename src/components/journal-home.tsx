@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatRatio } from "@/domain";
+import { BrewJournalRow } from "./brew-journal-row";
 import { groupJournal, journalDateKey, journalFilter, type JournalFilter, type JournalItem } from "@/domain/journal";
 import type { SavedBrewPreparation } from "@/domain/brew-preparation";
 import { JournalService } from "@/application/journal-service";
@@ -58,9 +58,7 @@ export function JournalHome() {
       </div></article>;
     }
     const brew = item.brew;
-    return <Link className="journal-brew-row" href={`/journal/${encodeURIComponent(brew.id)}`} key={brew.id}>
-      <span className="journal-bean-tile" aria-hidden="true">♧</span><div><h3>{brew.recordDetails?.bean?.name ?? brew.recipeSnapshot.bean?.name ?? brew.recipeSnapshot.title}</h3><p>{brew.recipeSnapshot.title} · {brew.recordDetails?.equipment?.dripper ?? brew.recipeSnapshot.dripper.value}</p>{brew.appliedAdjustment && <p className="journal-adjustment">{copy.applied}：{brew.appliedAdjustment.adjustment.description}</p>}</div><div className="journal-ratio"><strong>{formatRatio(brew.recordDetails?.actualDoseGrams ?? brew.recipeSnapshot.doseGrams.value, brew.recordDetails?.actualWaterGrams ?? brew.recipeSnapshot.totalWaterGrams.value)}</strong><small>粉水比</small></div>
-    </Link>;
+    return <BrewJournalRow key={brew.id} brew={brew}/>;
 
   }
   const failed = !!data && (filter !== "preparations" && !!data.brewError || filter !== "completed" && !!data.preparationError);

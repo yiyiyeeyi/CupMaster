@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-10-28] [批次 2 C] Collection 已 push：豆子／方案、明示舊豆匯入、手動新增編輯與五格導覽完成。67 檔／959 tests、lint／typecheck／乾淨 build 通過；390×844 無水平捲動。清掉本機舊 webpack cache 後五格樣式正確；先前多個舊 QA 服務造成記憶體不足，關閉後重建通過。handoff：docs/project/batch-2-c-collection.md。（b5f9eee）
+
 - [2026-10-28] [批次 2 B] 步驟 B 已 push，待深度審查。Bean 庫、顯示快照、明示匯入／略過、刪除 pending 重試與新欄位 fail-closed preflight 完成；66 檔／953 tests、lint／typecheck／build 通過。REQ-37b 實際欄位清單已補同步，handoff：docs/project/batch-2-b-beans.md。Collection 詢問 UI 接於 C。（10e575b）
 
 - [2026-10-27] [批次 2 A] 步驟 A 已 push，待深度審查。唯一來源為結構化 Snapshot.grind；三種格式、legacy 字串不猜測、格式切換清空、preflight 阻擋已完成。65 檔／943 tests、lint／typecheck／build、390×844 三種格式操作通過；handoff：docs/project/batch-2-a-grinders.md。（539be23）
