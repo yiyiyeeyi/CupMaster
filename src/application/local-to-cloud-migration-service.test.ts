@@ -27,6 +27,7 @@ describe("migration consent and preparation",()=>{
 });
 describe("migration projections and profile policy",()=>{
  it("compares product content while ignoring database updatedAt",()=>expect(sameMigrationEntity({...source,updatedAt:"2026-01-01T00:00:00.000Z"},{...source,updatedAt:"2026-02-01T00:00:00.000Z"})).toBe(true));
+ it("treats undefined JSON object fields as omitted during remote parity comparison",()=>expect(sameMigrationEntity({id:"optional-field",recordDetails:{bean:null,optional:undefined}},{id:"optional-field",recordDetails:{bean:null}})).toBe(true));
  it("neutralizes a circular Brew reference without modifying Local",()=>{const before=structuredClone(result),base=toMigrationBaseBrew(result);expect(base).toMatchObject({id:result.id,sourceType:"recipe"});expect(base.sourceSuggestedPlanId).toBeUndefined();expect(result).toEqual(before)});
  it("restores the source Plan reference while preserving payloads",()=>{const base=toMigrationBaseBrew(result),patched=buildBrewReferencePatch(result,base);expect(patched.sourceSuggestedPlanId).toBe(plan.id);expect(patched.recipeSnapshot).toEqual(result.recipeSnapshot);expect(patched.stageResults).toEqual(result.stageResults)});
  it("never changes targets into actual measurements",()=>{const base=toMigrationBaseBrew(result);expect(base.actualTotalWater).toBe(result.actualTotalWater);expect(base.stageResults.every(x=>x.actualWeight===null)).toBe(true)});

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { afterAll, describe, expect, it } from "vitest";
 import { beanBrews, beanSnapshot } from "@/domain/beans";
 import { bestStars } from "@/domain/brew-ratings";
+import { sameMigrationEntity, sameParityEntity } from "@/domain/migration-engine";
 import { MigrationRemotePreflightService } from "@/application/migration-remote-preflight-service";
 import { LocalToCloudMigrationService } from "@/application/local-to-cloud-migration-service";
 import { MigrationReviewService } from "@/application/migration-review-service";
@@ -33,6 +34,21 @@ class MemoryStorage {
   getItem(key: string) { return this.values.get(key) ?? null; }
   setItem(key: string, value: string) { this.values.set(key, value); }
   removeItem(key: string) { this.values.delete(key); }
+}
+
+function changedPaths(left: unknown, right: unknown, path = ""): string[] {
+  if (Object.is(left, right)) return [];
+  if (Array.isArray(left) && Array.isArray(right)) return left.length === right.length ? left.flatMap((value, index) => changedPaths(value, right[index], `${path}[${index}]`)) : [path || "array-length"];
+  if (left && right && typeof left === "object" && typeof right === "object" && !Array.isArray(left) && !Array.isArray(right)) {
+    const l = left as Record<string, unknown>, r = right as Record<string, unknown>;
+    return [...new Set([...Object.keys(l), ...Object.keys(r)])].flatMap((key) => {
+      if (key === "updatedAt" || key === "revision") return [];
+      const childPath = path ? `${path}.${key}` : key;
+      if (Object.prototype.hasOwnProperty.call(l, key) !== Object.prototype.hasOwnProperty.call(r, key)) return [childPath];
+      return changedPaths(l[key], r[key], childPath);
+    });
+  }
+  return [path || "value"];
 }
 
 describe.skipIf(!enabled)("REQ-37b local Supabase migration integration", () => {
@@ -67,9 +83,9 @@ describe.skipIf(!enabled)("REQ-37b local Supabase migration integration", () => 
     if (!beanResult.ok) throw new Error(beanResult.message);
 
     const fixtures = createFullDemoFixtures();
-    const source = fixtures.brews[0];
-    const feedbackSource = fixtures.brews.find((brew) => brew.flavorFeedback)?.flavorFeedback;
-    if (!feedbackSource) throw new Error("Demo fixture has no flavor feedback template.");
+    const source = fixtures.brews.find((brew) => brew.executionStatus === "completed" && brew.recordStatus === "saved" && brew.flavorFeedback && brew.recordDetails);
+    if (!source?.recordDetails || !source.flavorFeedback) throw new Error("Demo fixture has no complete saved Brew template.");
+    const feedbackSource = source.flavorFeedback;
     const grindSettings = [
       { grinderId: "timemore-c3", format: "single" as const, value: 18 },
       { grinderId: "1zpresso-k-ultra", format: "compound" as const, parts: [0, 9, 2] },
@@ -83,9 +99,9 @@ describe.skipIf(!enabled)("REQ-37b local Supabase migration integration", () => 
         id,
         beanId: beanResult.value.id,
         sourcePreparationId: index === 0 ? "req37b-saved-preparation" : undefined,
-        recipeSnapshot: { ...structuredClone(source.recipeSnapshot), bean: beanSnapshot(beanResult.value), grind, brewTemperatureMode: "iced", iceGrams: 70 + index * 10, equipment: { ...source.recipeSnapshot.equipment, grinder: grind.grinderId, grinderId: grind.grinderId, grinderSetting: settingText, accessories: ["server"] } },
+        recipeSnapshot: { ...structuredClone(source.recipeSnapshot), bean: beanSnapshot(beanResult.value), grind, brewTemperatureMode: "iced", iceGrams: 70 + index * 10, equipment: { ...source.recipeSnapshot.equipment, dripper: source.recipeSnapshot.dripper.value, grinder: grind.grinderId, grinderId: grind.grinderId, grinderSetting: settingText, accessories: ["server"] } },
         brewPlan: { ...structuredClone(source.brewPlan), grind, brewTemperatureMode: "iced", iceGrams: 70 + index * 10, equipment: { grinder: grind.grinderId, grinderId: grind.grinderId, grinderSetting: settingText, accessories: ["server"] } },
-        flavorFeedback: { ...structuredClone(feedbackSource), id: `${id}:feedback`, brewId: id, overallImpression: undefined, stars: 3 + index, aroma: 4, tasteTags: ["甜", "平衡"], createdAt: source.updatedAt, updatedAt: source.updatedAt },
+        flavorFeedback: { ...structuredClone(feedbackSource), id: `${id}:feedback`, brewId: id, overallImpression: undefined, stars: 3 + index, aroma: 4, tasteTags: ["sweet", "balanced"], createdAt: source.updatedAt, updatedAt: source.updatedAt },
         feedbackStatus: "completed",
         recordDetails: { ...structuredClone(source.recordDetails), bean: { name: beanResult.value.name, roaster: beanResult.value.roaster, origin: beanResult.value.origin, process: beanResult.value.process }, equipment: { grinder: grind.grinderId, grinderSetting: settingText, dripper: "V60 02" } },
         updatedAt: source.updatedAt,
@@ -114,6 +130,19 @@ describe.skipIf(!enabled)("REQ-37b local Supabase migration integration", () => 
     const checkpointStorage = new MemoryStorage();
     const migration = new LocalToCloudMigrationService(local, gateway, new CloudMigrationCheckpointRepository(checkpointStorage), created.data.user.id);
     const result = await migration.start({ consentConfirmed: true, reviewFingerprint: review.reviewFingerprint });
+    if (!result.ok) {
+      const [remoteBeanRows, remotePreparationRows, remoteBrewRows, remoteState] = await Promise.all([remote.parityRepository.listBeansForMigration(), remote.parityRepository.listPreparationsForMigration(), remote.brewRepository.listAll(), remote.parityRepository.readLibraryState()]);
+      const localBeanRows = beans.read();
+      const localPreparationRows = preparations.read();
+      const localLibraryState = localBeanRows.ok && localPreparationRows.ok ? { legacyImportReviewed: localBeanRows.value.legacyImportReviewed, redirects: localPreparationRows.value.redirects, lineage: localPreparationRows.value.lineage, deletedIds: localPreparationRows.value.deletedIds } : null;
+      const mismatches = [
+        ...(remoteBeanRows.ok ? (localBeanRows.ok ? localBeanRows.value.beans.filter((bean) => { const row = remoteBeanRows.value.find((item) => item.entity.id === bean.id); return !row || !sameParityEntity(bean, row.entity); }).map((bean) => `bean:${bean.id}`) : ["local-beans-unreadable"]) : ["remote-beans-unreadable"]),
+        ...(remotePreparationRows.ok ? (localPreparationRows.ok ? localPreparationRows.value.entries.filter((entry) => { const row = remotePreparationRows.value.find((item) => item.entity.id === entry.id); return !row || !sameParityEntity({ id: entry.id, entry, deletedAt: null }, row.entity); }).map((entry) => `preparation:${entry.id}`) : ["local-preparations-unreadable"]) : ["remote-preparations-unreadable"]),
+        ...(remoteBrewRows.ok ? brews.flatMap((brew) => { const row = remoteBrewRows.value.find((item) => item.id === brew.id); return !row ? [`brew:${brew.id}:missing`] : sameMigrationEntity(brew, row) ? [] : [`brew:${brew.id}:${changedPaths(brew, row).join("|")}`]; }) : ["remote-brews-unreadable"]),
+        ...(remoteState.ok && remoteState.value && localLibraryState && sameParityEntity(localLibraryState, remoteState.value.entity) ? [] : ["library-state"]),
+      ];
+      throw new Error(`Local Supabase migration failed safely: ${result.code}; entity=${result.checkpoint?.failedEntityType ?? "unknown"}; mismatches=${mismatches.join(",") || "none"}.`);
+    }
     expect(result).toMatchObject({ ok: true, checkpoint: { status: "completed", migratedBeanIds: [beanResult.value.id], migratedPreparationIds: ["req37b-saved-preparation"], totalBrewCount: 3, graphVerified: true } });
 
     const [remoteBeans, remotePreparations, remoteBrews, remoteJournal, remoteLibraryState] = await Promise.all([

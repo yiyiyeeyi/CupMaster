@@ -14,7 +14,8 @@
 - lint 無警告、typecheck 通過。
 - 72 個測試檔通過，1006 passed；1 個 opt-in 本機 Supabase E2E skipped。
 - `npm run build`（webpack）通過。
-- E2E 仍待 Docker Desktop daemon 可用後實跑；在此之前 D 的 E2E 清單保持未完成。
+- 本機 Supabase E2E 通過：localhost `127.0.0.1:54321` 建立臨時 Auth 使用者，搬移一包豆、已存準備與三杯三種刻度的冰沖／五星紀錄；從 Supabase repositories 讀回 Brew、Journal、Bean Detail／Collection 投影、library metadata 均與本機一致。`afterAll` 刪除臨時測試使用者。
+- E2E 驗證修正了遷移比較器對 JSONB `undefined` 欄位與省略欄位的差異判定；JSON 物件欄位未定義值與缺席鍵現在視為相同，並有回歸測試。
 
 ## 範圍與限制
 
