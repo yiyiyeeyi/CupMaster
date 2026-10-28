@@ -240,9 +240,9 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 - [x] 本機堆疊第一輪恢復成功；停止、volume、excluded port、start --debug 均依清單完成，不需第二輪；未碰雲端。（5c03635）
 
 ### 步驟 C：mapper＋雲端 repository
-- [ ] 本機 → 雲端 → 本機 的 round-trip 測試：做一筆「每個選填欄位都有值」的完整 Brew（刻度三種格式各一、豆子快照全欄位、beanId、冰沖＋冰量、配件、每段 pourMethod、stars／aroma／tasteTags、無 overallImpression、appliedAdjustment、sourcePreparationId）、一包全欄位豆子（含已刪除 tombstone）、一筆已存準備，經 mapper 後必須 deep equal。
-- [ ] 舊資料 round-trip：只有 overallImpression、只有 legacy 刻度字串、只有 pattern 沒有 pourMethod 的舊 Brew，也要原樣回來。
-- [ ] profiles.preferences 的 displayNameConfirmed／experienceLevelSource 保留（既有 jsonb，不要覆寫其他 key）。
+- [x] 完整 Brew（所有選填欄位、三種刻度、豆快照、冰沖／冰量、配件、pourMethod、stars/aroma/tags、無 overallImpression、adjustment/preparation refs）、Bean、Bean tombstone、準備與準備 tombstone 均經 mapper/fake Supabase client round-trip deep equal。（1a5bc62）
+- [x] 舊 Brew（overallImpression、legacy 刻度字串、舊 pattern 無 pourMethod）round-trip 原樣保留；登錄表收緊／改格式不影響舊資料讀取。（1a5bc62）
+- [x] profiles.preferences 新建時帶入 displayNameConfirmed／experienceLevelSource，更新時合併保留其他 keys。（1a5bc62）
 
 ### 步驟 D：解除 preflight
 - [ ] 只解除「已有 round-trip 測試覆蓋」的欄位；沒覆蓋到的繼續 fail closed。每解除一項，對應測試要從「被擋」改成「搬得上去且 round-trip 相等」。
@@ -267,18 +267,18 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b
 - [x] 第一輪成功，兩輪皆失敗的條件不成立；沒有轉雲端或開 branch。（2026-10-28）
 
 ### 線 2：步驟 C 現在就做（不需要資料庫）
-- [ ] 依 SQL 草稿的欄位寫 beans／brew_preparations／library_states mapper、brews 新欄位 mapper、cloud-row-schemas、remote gateway，round-trip 單元測試用假 client（fault-injecting gateway 那套），不連 DB。
-- [ ] 推送順序寫死並測：beans → brew_preparations → brews → library_states。理由：PostgREST 每個請求各自一個 transaction，`deferrable initially deferred` 跨請求沒用，Brew 先到會撞 FK。
+- [x] beans／brew_preparations／library_states mapper、Brew 新欄位 mapper、cloud-row-schemas、owner-scoped remote repository/gateway 與 fake-client round-trip 已完成，mapper 測試不連 DB。（1a5bc62）
+- [x] gateway 順序固定為 beans → brew_preparations → brews → suggested_plans → library_states，並測試失敗即停；FK 跨請求靠 Bean 先寫。（1a5bc62）
 - [x] Zod shape schemas 先定義，再以本機 DB 正式 gen `database.types.ts`；未手寫假型別。（2026-10-28）
-- [ ] D 的 preflight 解鎖**還不要做**，全部 fail-closed 保留，等 SQL 在本機驗證過。
+- [x] C 期間保持 preflight fail-closed；B 本機 SQL 驗證完成後才開始 D。（5c03635）
 
 ### SQL 草稿靜態審查（Claude）
 整體跟 core migration 同一套寫法（owner 複合 PK、`(select auth.uid())` RLS、無 delete 權限、anon 全收回、set_updated_at trigger、FK 有索引），方向對。修這幾點：
-- [x] **P2 隱私／範圍**：raw backups 僅留本機；library_states mapper 白名單只同步 metadata，並測試不含備份 key。（2026-10-28）
-- [x] **P3**：Bean tombstone payload 保留完整 BeanRecord，本機實際形狀已核對並在 SQL 註解說明。（2026-10-28）
-- [x] **P3**：SQL 註明 deferrable 跨請求無效，靠推送順序。（2026-10-28）
-- [x] 本機 SQL 負向測試涵蓋 Bean/preparation payload ID 不一致與 null tombstone 規則。（2026-10-28）
-- [x] 本機 SQL 測試的 Brew insert 欄位已按 core migration NOT NULL 清單核對並成功執行。（2026-10-28）
+- [x] **P2 隱私／範圍**：raw backups 僅留本機；library_states mapper 白名單只同步 metadata，並測試不含備份 key。（1a5bc62）
+- [x] **P3**：Bean tombstone payload 保留完整 BeanRecord，本機實際形狀已核對並在 SQL 註解說明。（5c03635）
+- [x] **P3**：SQL 註明 deferrable 跨請求無效，靠推送順序。（5c03635）
+- [x] 本機 SQL 負向測試涵蓋 Bean/preparation payload ID 不一致與 null tombstone 規則。（5c03635）
+- [x] 本機 SQL 測試的 Brew insert 欄位已按 core migration NOT NULL 清單核對並成功執行。（5c03635）
 
 ### 之後
 本機起來 → 回到 B（reset、重跑兩次、SQL 測試、advisors、gen types）→ D → E 停。E 的規則不變。
