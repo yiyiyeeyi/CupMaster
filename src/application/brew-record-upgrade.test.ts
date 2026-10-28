@@ -55,7 +55,7 @@ describe("V1 completed record compatibility", () => {
   it("uses one impression for quick feeling and detailed feedback, and preserves it when deferring details", () => {
     const s = setup(), service = new BrewService(s.repository);
     expect(service.setOverallImpression(s.brew.id, "neutral")).toMatchObject({ ok: true, value: { flavorFeedback: { overallImpression: "neutral" } } });
-    expect(service.upsertFlavorFeedback(s.brew.id, { overallImpression: "neutral", flavorNotes: ["juicy"], sweetness: 4 }).ok).toBe(true);
+    expect(service.upsertFlavorFeedback(s.brew.id, { stars:3, overallImpression: "neutral", flavorNotes: ["juicy"], sweetness: 4 }).ok).toBe(true);
     expect(service.setOverallImpression(s.brew.id, "liked")).toMatchObject({ ok: true, value: { feedbackStatus: "completed", flavorFeedback: { overallImpression: "liked", flavorNotes: ["juicy"], sweetness: 4 } } });
     expect(service.skipFlavorFeedback(s.brew.id)).toMatchObject({ ok: true, value: { flavorFeedback: { overallImpression: "liked", flavorNotes: ["juicy"] } } });
   });

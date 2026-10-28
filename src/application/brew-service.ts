@@ -195,7 +195,8 @@ export class BrewService {
     const parsed = flavorFeedbackInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: "invalid_feedback", message: parsed.error.issues[0]?.message ?? "The flavor feedback is invalid.", latest: brew };
     const now = this.now();
-    const feedback: FlavorFeedback = { ...parsed.data, id: brew.flavorFeedback?.id ?? this.dependencies.createId?.() ?? createUniqueId(), brewId: brew.id, createdAt: brew.flavorFeedback?.createdAt ?? now, updatedAt: now };
+    const previous=brew.flavorFeedback;
+    const feedback: FlavorFeedback = { ...parsed.data, ...(previous?.balance!==undefined&&parsed.data.balance===undefined&&{balance:previous.balance}), ...(previous?.overallImpression&&parsed.data.overallImpression===undefined&&{overallImpression:previous.overallImpression}), id: previous?.id ?? this.dependencies.createId?.() ?? createUniqueId(), brewId: brew.id, createdAt: previous?.createdAt ?? now, updatedAt: now };
     const updated: Brew = { ...brew, flavorFeedback: feedback, feedbackStatus: "completed", updatedAt: now };
     const written = writeBrewWithPreparationCleanup(this.repository, updated, this.dependencies.preparations);
     return written.ok ? { ok: true, value: written.value } : { ok: false, code: "persistence_failed", message: written.message, latest: brew };

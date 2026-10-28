@@ -1,14 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { createBrewDraft, createQuickPrepareDefaults } from "./brew-factory";
 import { BrewService } from "./brew-service";
-import { flavorFeedbackInputSchema } from "@/domain";
+import { flavorFeedbackInputSchema,flavorFeedbackSchema,feedbackRatingLabel,buildBrewAnalysisInput } from "@/domain";
+import {RuleBasedBrewAnalysisProvider} from "./rule-based-brew-analysis-provider";
 import { recipeFixtures } from "@/data/fixtures/recipes";
 import { LocalBrewRepository, LOCAL_BREW_KEY } from "@/repositories/local-brew-repository";
 
 class MemoryStorage { values = new Map<string,string>(); failWrites = false; getItem(key:string) { return this.values.get(key) ?? null; } setItem(key:string,value:string) { if (this.failWrites) throw new Error("quota"); this.values.set(key,value); } }
-const input = { overallImpression: "liked" as const, acidity: 4 as const, flavorNotes: ["clean" as const], freeformNotes: "  Bright cup  " };
+const input = { stars:4 as const, overallImpression: "liked" as const, acidity: 4 as const, flavorNotes: ["clean" as const], freeformNotes: "  Bright cup  " };
 function setup(status: "completed" | "in_progress" = "completed") { const storage = new MemoryStorage(); const repository = new LocalBrewRepository(storage); const draft = createBrewDraft(recipeFixtures[0], createQuickPrepareDefaults(recipeFixtures[0]), { now:()=>"2026-07-18T00:00:00.000Z", createId:()=>"brew-1" }); repository.createDraft({ ...draft, executionStatus:status, completedAt:status === "completed" ? "2026-07-18T00:03:00.000Z" : null, feedbackStatus:status === "completed" ? "awaiting_feedback" : "not_requested" }); return { storage, repository }; }
 describe("Flavor Feedback", () => {
+  it("requires whole stars for new submissions but keeps legacy storage readable",()=>{
+    const {stars,...legacy}=input;
+    expect(stars).toBe(4);expect(flavorFeedbackInputSchema.safeParse(legacy).success).toBe(false);
+    for(const value of [0,6,2.5])expect(flavorFeedbackInputSchema.safeParse({...input,stars:value}).success).toBe(false);
+    expect(flavorFeedbackSchema.safeParse({...legacy,id:"f",brewId:"b",createdAt:"2026-10-28T00:00:00Z",updatedAt:"2026-10-28T00:00:00Z"}).success).toBe(true);
+    expect(feedbackRatingLabel(legacy)).toBe("喜歡");expect(feedbackRatingLabel({...legacy,stars:1})).toBe("★☆☆☆☆");
+  });
+  it("saves stars, aroma and tags without fabricating an impression or invoking analysis",()=>{
+    const {storage,repository}=setup();const result=new BrewService(repository).upsertFlavorFeedback("brew-1",{stars:5,aroma:4,tasteTags:["sweet","clean"],flavorNotes:[]});
+    expect(result).toMatchObject({ok:true,value:{analysisStatus:"not_requested",flavorFeedback:{stars:5,aroma:4,tasteTags:["sweet","clean"]}}});
+    const reloaded=new LocalBrewRepository(storage).getById("brew-1").value?.flavorFeedback;
+    expect(reloaded).toMatchObject({stars:5,aroma:4,tasteTags:["sweet","clean"]});expect(reloaded?.overallImpression).toBeUndefined();
+    expect(flavorFeedbackInputSchema.safeParse({...input,aroma:2.5}).success).toBe(false);
+    expect(flavorFeedbackInputSchema.safeParse({...input,tasteTags:["sweet","sweet"]}).success).toBe(false);
+    expect(flavorFeedbackInputSchema.safeParse({...input,tasteTags:["invented"]}).success).toBe(false);
+  });
+  it("keeps legacy balance, impression and flavor notes while adding stars",()=>{
+    const {repository}=setup(),brew=repository.getById("brew-1").value!;
+    repository.updateDraft({...brew,flavorFeedback:{id:"f",brewId:brew.id,overallImpression:"liked",balance:2,flavorNotes:["floral"],createdAt:brew.createdAt,updatedAt:brew.updatedAt}});
+    expect(new BrewService(repository).upsertFlavorFeedback(brew.id,{stars:3,flavorNotes:["floral"]})).toMatchObject({ok:true,value:{flavorFeedback:{stars:3,balance:2,overallImpression:"liked",flavorNotes:["floral"]}}});
+  });
+  it("uses stars before legacy impression in rule analysis without converting either",async()=>{
+    const {repository}=setup(),brew=repository.getById("brew-1").value!;
+    const feedback={id:"f",brewId:brew.id,overallImpression:"liked" as const,stars:1 as const,flavorNotes:[],createdAt:brew.createdAt,updatedAt:brew.updatedAt};
+    const result=await new RuleBasedBrewAnalysisProvider().analyze(buildBrewAnalysisInput({...brew,flavorFeedback:feedback}));
+    expect(result.observations.find(item=>item.id==="user-rating")?.evidence).toContainEqual({field:"feedback.stars",label:"User rating",value:"1/5"});
+  });
   it("adds feedback to a completed Brew",()=>{ const {repository}=setup(); const result=new BrewService(repository,{now:()=>"2026-07-18T01:00:00.000Z",createId:()=>"feedback-1"}).upsertFlavorFeedback("brew-1",input); expect(result.ok && result.value.flavorFeedback?.id).toBe("feedback-1"); });
   it("rejects an in-progress Brew",()=>expect(new BrewService(setup("in_progress").repository).upsertFlavorFeedback("brew-1",input)).toMatchObject({ok:false,code:"invalid_execution_status"}));
   it("returns brew_not_found",()=>expect(new BrewService(new LocalBrewRepository(new MemoryStorage())).upsertFlavorFeedback("missing",input)).toMatchObject({ok:false,code:"brew_not_found"}));

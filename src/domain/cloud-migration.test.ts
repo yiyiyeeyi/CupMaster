@@ -29,6 +29,10 @@ describe("migration graph validation", () => {
     ["snapshot setting", (b:Brew)=>{b.recipeSnapshot.equipment={dripper:"V60",grinderSetting:"24"};}],
     ["snapshot accessories", (b:Brew)=>{b.recipeSnapshot.equipment={dripper:"V60",accessories:["Lilydrip"]};}],
     ["plan gear", (b:Brew)=>{b.brewPlan.equipment={grinder:"custom"};}],
+    ["feedback stars", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,overallImpression:"liked",stars:4,flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
+    ["feedback aroma", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,overallImpression:"liked",aroma:3,flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
+    ["feedback tags", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,overallImpression:"liked",tasteTags:["sweet"],flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
+    ["feedback without legacy impression", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
     ["step method", (b:Brew)=>{b.recipeSnapshot.steps[0].pourMethod="drain";}],
     ["stage method", (b:Brew)=>{b.brewPlan.stages[0].pourMethod="outward";}],
   ] as const)("blocks unmapped %s before cloud writes",(_,change)=>{

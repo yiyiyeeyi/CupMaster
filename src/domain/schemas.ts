@@ -65,14 +65,17 @@ export const quickPrepareSchema = z.object({
 export const flavorOverallImpressionSchema = z.enum(["liked", "neutral", "disliked"]);
 export const flavorRatingSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 export const flavorNoteSchema = z.enum(["floral", "citrus", "berry", "stone_fruit", "tropical", "nutty", "chocolate", "caramel", "tea_like", "spicy", "fermented", "clean", "juicy", "dry", "bitter", "sour"]);
-export const flavorFeedbackInputSchema = z.object({
-  overallImpression: flavorOverallImpressionSchema,
+export const tasteTagSchema=z.enum(["sweet","sour","bitter","clean","full","light","aromatic","astringent","balanced"]);
+const flavorFeedbackFields = z.object({
+  stars:flavorRatingSchema.optional(), aroma:flavorRatingSchema.optional(), tasteTags:z.array(tasteTagSchema).refine(tags=>new Set(tags).size===tags.length,"Taste tags cannot be repeated.").optional(),
+  overallImpression: flavorOverallImpressionSchema.optional(),
   acidity: flavorRatingSchema.optional(), sweetness: flavorRatingSchema.optional(), bitterness: flavorRatingSchema.optional(),
   body: flavorRatingSchema.optional(), clarity: flavorRatingSchema.optional(), aftertaste: flavorRatingSchema.optional(), balance: flavorRatingSchema.optional(),
   flavorNotes: z.array(flavorNoteSchema).refine((notes) => new Set(notes).size === notes.length, "Flavor notes cannot be repeated."),
   freeformNotes: z.string().trim().max(500).transform((value) => value || undefined).optional(),
 });
-export const flavorFeedbackSchema = flavorFeedbackInputSchema.extend({ id: z.string().min(1), brewId: z.string().min(1), createdAt: z.string().datetime(), updatedAt: z.string().datetime() });
+export const flavorFeedbackInputSchema=flavorFeedbackFields.extend({stars:flavorRatingSchema});
+export const flavorFeedbackSchema = flavorFeedbackFields.extend({ id: z.string().min(1), brewId: z.string().min(1), createdAt: z.string().datetime(), updatedAt: z.string().datetime() });
 const nullableText = (max:number) => z.string().trim().max(max).transform((value)=>value||undefined).nullish();
 const beanDetailsSchema = z.object({ name:nullableText(100),roaster:nullableText(100),origin:nullableText(120),variety:nullableText(120),process:nullableText(100),roastLevel:nullableText(50),roastDate:nullableText(10) }).transform((value)=>Object.fromEntries(Object.entries(value).filter(([,item])=>item!==undefined)));
 const equipmentDetailsSchema = z.object({ dripper:nullableText(80),grinder:nullableText(100),grinderSetting:nullableText(80),kettle:nullableText(100),filter:nullableText(100) }).transform((value)=>Object.fromEntries(Object.entries(value).filter(([,item])=>item!==undefined)));

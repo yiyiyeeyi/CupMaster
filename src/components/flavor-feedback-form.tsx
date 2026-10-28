@@ -1,34 +1,39 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { Brew, FlavorFeedbackInput, FlavorNote, FlavorOverallImpression, FlavorRating } from "@/domain";
-import { flavorFeedbackInputSchema, flavorNoteOptions } from "@/domain";
-import { BrewService, type BrewDomainErrorCode } from "@/application/brew-service";
-import { LocalBrewRepository } from "@/repositories/local-brew-repository";
-
-import { brewRecordCopy } from "./brew-record-copy";
-type LoadState = { status: "loading" } | { status: "missing"; message: string } | { status: "blocked"; brew: Brew } | { status: "ready"; brew: Brew };
-type RatingKey = "acidity" | "sweetness" | "bitterness" | "body" | "clarity" | "aftertaste" | "balance";
-const ratingFields: Array<{ key: RatingKey; label: string }> = [{ key: "acidity", label: "酸度" }, { key: "sweetness", label: "甜度" }, { key: "bitterness", label: "苦味" }, { key: "body", label: "醇厚度" }, { key: "clarity", label: "乾淨度" }, { key: "aftertaste", label: "餘韻" }, { key: "balance", label: "平衡" }];
-const impressions: Array<{ value: FlavorOverallImpression; label: string }> = [{ value: "liked", label: "喜歡" }, { value: "neutral", label: "普通" }, { value: "disliked", label: "不喜歡" }];
-const errorCopy: Partial<Record<BrewDomainErrorCode, string>> = { brew_not_found: "找不到這筆 Brew。", invalid_execution_status: "完成沖煮後才能補充風味回饋。", invalid_feedback: "請檢查標示的回饋欄位。", persistence_failed: "無法保存回饋，請確認瀏覽器允許本地儲存後重試。", already_skipped: "這筆回饋已標記為稍後再填。" };
-
-export function FlavorFeedbackForm({ brewId }: { brewId: string }) {
-  const router = useRouter(); const lock = useRef(false);
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [overallImpression, setOverallImpression] = useState<FlavorOverallImpression | undefined>();
-  const [ratings, setRatings] = useState<Partial<Record<RatingKey, FlavorRating>>>({});
-  const [notes, setNotes] = useState<FlavorNote[]>([]); const [freeformNotes, setFreeformNotes] = useState("");
-  const [error, setError] = useState<string>(); const [saving, setSaving] = useState(false);
-  useEffect(() => { const timer = window.setTimeout(() => { const result = new BrewService(new LocalBrewRepository()).getFlavorFeedback(brewId); if (!result.ok) { setState({ status: "missing", message: errorCopy[result.code] ?? result.message }); return; } if (result.brew.executionStatus !== "completed") { setState({ status: "blocked", brew: result.brew }); return; } const feedback = result.value; setState({ status: "ready", brew: result.brew }); if (feedback) { setOverallImpression(feedback.overallImpression); setRatings(Object.fromEntries(ratingFields.flatMap(({ key }) => feedback[key] ? [[key, feedback[key]]] : []))); setNotes(feedback.flavorNotes); setFreeformNotes(feedback.freeformNotes ?? ""); } }, 0); return () => window.clearTimeout(timer); }, [brewId]);
-  function toggleNote(note: FlavorNote) { setNotes((current) => current.includes(note) ? current.filter((item) => item !== note) : [...current, note]); }
-  function submit() { if (lock.current || state.status !== "ready") return; if (!overallImpression) { setError("請選擇整體感受。"); return; } const input: FlavorFeedbackInput = { overallImpression, ...ratings, flavorNotes: notes, ...(freeformNotes.trim() && { freeformNotes: freeformNotes.trim() }) }; const parsed = flavorFeedbackInputSchema.safeParse(input); if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "請檢查回饋內容。"); return; } lock.current = true; setSaving(true); const result = new BrewService(new LocalBrewRepository()).upsertFlavorFeedback(brewId, parsed.data); if (result.ok) router.replace(`/journal/${brewId}`); else { setState({ status: "ready", brew: result.latest ?? state.brew }); setError(errorCopy[result.code] ?? result.message); lock.current = false; setSaving(false); } }
-  function skip() { if (lock.current || state.status !== "ready") return; lock.current = true; setSaving(true); const result = new BrewService(new LocalBrewRepository()).skipFlavorFeedback(brewId); if (result.ok || result.code === "already_skipped") router.replace(`/journal/${brewId}`); else { setError(errorCopy[result.code] ?? result.message); lock.current = false; setSaving(false); } }
-  if (state.status === "loading") return <main className="route-loading"><p className="eyebrow">Flavor Feedback</p><h1>Loading your cup…</h1></main>;
-  if (state.status === "missing") return <main className="state-page"><p className="eyebrow">Flavor Feedback</p><h1>This Brew could not be found.</h1><p>{state.message}</p><Link className="primary-button" href="/journal">Back to Journal</Link></main>;
-  if (state.status === "blocked") return <main className="state-page"><p className="eyebrow">Flavor Feedback</p><h1>完成沖煮後才能補充風味回饋</h1><p>目前 Brew 狀態是 {state.brew.executionStatus.replace("_", " ")}。</p><div className="form-actions"><Link className="primary-button" href={`/brew/${brewId}`}>Back to Brew</Link><Link className="secondary-button" href="/journal">Journal</Link></div></main>;
-  const feedback = state.brew.flavorFeedback;
-  return <main className="feedback-page"><div className="summary-topbar"><Link aria-label="Back to Brew Detail" className="back-link" href={`/journal/${brewId}`}>←</Link><h1>Flavor Feedback</h1><span /></div><section className="feedback-identity"><h2>{state.brew.recipeSnapshot.title}</h2><p>{state.brew.recipeSnapshot.bean?.name ?? "未記錄咖啡豆"} · {new Date(state.brew.completedAt ?? state.brew.updatedAt).toLocaleDateString()}</p></section>{error && <p className="form-error" role="alert">{error}</p>}{feedback?.overallImpression ? <p className="feedback-impression">{brewRecordCopy.overallImpression}：{brewRecordCopy[feedback.overallImpression]}（{brewRecordCopy.editImpression}）</p> : <fieldset className="feedback-section"><legend>整體感受 <span>必填</span></legend><div className="impression-options">{impressions.map((item) => <label key={item.value}><input checked={overallImpression === item.value} name="overall-impression" onChange={() => { setOverallImpression(item.value); setError(undefined); }} type="radio" value={item.value} /><span>{item.label}</span></label>)}</div></fieldset>}<section className="feedback-section"><h2>風味強度 <span>選填 · 1 很低，5 很高</span></h2><div className="rating-grid">{ratingFields.map((field) => <fieldset key={field.key}><legend>{field.label}</legend><div>{([1,2,3,4,5] as FlavorRating[]).map((value) => <label key={value}><input checked={ratings[field.key] === value} name={field.key} onChange={() => setRatings((current) => ({ ...current, [field.key]: value }))} type="radio" value={value} /><span>{value}</span></label>)}</div></fieldset>)}</div></section><fieldset className="feedback-section"><legend>Flavor Notes <span>選填，可多選</span></legend><div className="flavor-note-grid">{flavorNoteOptions.map((item) => <label key={item.value}><input checked={notes.includes(item.value)} onChange={() => toggleNote(item.value)} type="checkbox" /><span>{item.label}</span></label>)}</div></fieldset><section className="feedback-section"><label className="notes-label" htmlFor="feedback-notes">Additional Notes <span>選填</span></label><textarea id="feedback-notes" maxLength={500} onChange={(event) => setFreeformNotes(event.target.value)} rows={5} value={freeformNotes} /><p className="character-count">{freeformNotes.length}/500</p><p className="feedback-boundary">這是你的主觀風味紀錄；AI Analysis 可在之後另行要求。</p></section><div className="feedback-actions"><button className="primary-button" disabled={saving} onClick={submit} type="button">{saving ? "Saving…" : feedback ? "Update Feedback" : "Save Feedback"}</button><button className="text-button" disabled={saving} onClick={skip} type="button">Skip for now</button></div></main>;
+import {useEffect,useRef,useState} from "react";
+import {useRouter} from "next/navigation";
+import type {Brew,FlavorRating,TasteTag,FlavorFeedbackInput} from "@/domain";
+import {BrewService} from "@/application/brew-service";
+import {LocalBrewRepository} from "@/repositories/local-brew-repository";
+import {feedbackCopy as copy} from "./feedback-copy";
+import {cupCopy} from "./cup-copy";
+import "./feedback-v17.css";
+type RatingKey=keyof typeof copy.fields;
+const ratingKeys=Object.keys(copy.fields) as RatingKey[];
+const tagKeys=Object.keys(copy.tags) as TasteTag[];
+const rating=(value:number):FlavorRating=>value<=1?1:value===2?2:value===3?3:value===4?4:5;
+export function FlavorFeedbackForm({brewId}:{brewId:string}){
+  const router=useRouter(),lock=useRef(false);
+  const [brew,setBrew]=useState<Brew|null>(),[error,setError]=useState<string>(),[stars,setStars]=useState<FlavorRating>(),[ratings,setRatings]=useState<Partial<Record<RatingKey,FlavorRating>>>({}),[tags,setTags]=useState<TasteTag[]>([]),[notes,setNotes]=useState(""),[saving,setSaving]=useState(false);
+  useEffect(()=>{const timer=setTimeout(()=>{const read=new BrewService(new LocalBrewRepository()).getFlavorFeedback(brewId);if(!read.ok){setError(read.message);setBrew(null);return;}setBrew(read.brew);const f=read.value;if(f){setStars(f.stars);setRatings(Object.fromEntries(ratingKeys.flatMap(key=>f[key]===undefined?[]:[[key,f[key]]])));setTags(f.tasteTags??[]);setNotes(f.freeformNotes??"");}},0);return()=>clearTimeout(timer);},[brewId]);
+  async function submit(analyze=false){
+    if(lock.current||!brew)return;if(!stars){setError(copy.required);return;}
+    const legacy=brew.flavorFeedback;
+    const input:FlavorFeedbackInput={stars,...ratings,tasteTags:tags,flavorNotes:legacy?.flavorNotes??[],...(legacy?.balance!==undefined&&{balance:legacy.balance}),...(legacy?.overallImpression&&{overallImpression:legacy.overallImpression}),freeformNotes:notes};
+    lock.current=true;setSaving(true);setError(undefined);
+    const result=new BrewService(new LocalBrewRepository()).upsertFlavorFeedback(brewId,input);
+    if(result.ok){if(analyze)await new BrewService(new LocalBrewRepository()).requestBrewAnalysis(brewId);router.replace(`/journal/${encodeURIComponent(brewId)}${analyze?"/analysis":""}`);}
+    else{setError(copy.retry);lock.current=false;setSaving(false);}
+  }
+  if(brew===undefined)return <main className="feedback-page"><p role="status">{copy.loading}</p></main>;
+  if(!brew||brew.executionStatus!=="completed")return <main className="feedback-page"><p role="alert">{error??copy.blocked}</p><Link href="/journal">Journal</Link></main>;
+  return <main className="feedback-page"><header className="feedback-header"><Link href={`/journal/${encodeURIComponent(brewId)}`} aria-label={copy.back}>←</Link><div><p className="eyebrow">{copy.kicker}</p><h1>{copy.title}</h1></div><span/></header><section className="feedback-identity"><h2>{brew.recordDetails?.bean?.name??brew.recipeSnapshot.bean?.name??cupCopy.title}</h2><p>{brew.recipeSnapshot.title} · {brew.recipeSnapshot.dripper.value}</p></section>
+    {error&&<p role="alert">{error}</p>}
+    {brew.flavorFeedback?.overallImpression&&!brew.flavorFeedback.stars&&<p className="legacy-feedback">{copy.legacy}：{cupCopy.impressions[brew.flavorFeedback.overallImpression]}</p>}
+    <fieldset className="feedback-stars"><legend>{copy.stars}</legend><div>{([1,2,3,4,5] as const).map(value=><button key={value} type="button" aria-label={`${value} 顆星`} aria-pressed={stars===value} onClick={()=>{setStars(value);setError(undefined);}}>{stars&&value<=stars?"★":"☆"}</button>)}</div></fieldset>
+    <fieldset className="feedback-tags"><legend>{copy.taste}</legend><div>{tagKeys.map(tag=><button type="button" key={tag} aria-pressed={tags.includes(tag)} onClick={()=>setTags(current=>current.includes(tag)?current.filter(item=>item!==tag):[...current,tag])}>{copy.tags[tag]}</button>)}</div></fieldset>
+    <section className="feedback-sliders"><h2 className="feedback-section-title">{copy.detail} <small>1–5 · {copy.optional}</small></h2>{ratingKeys.map(key=><div className="feedback-slider" key={key}><label htmlFor={`rating-${key}`}>{copy.fields[key]}</label><input id={`rating-${key}`} aria-valuetext={ratings[key]===undefined?copy.optional:String(ratings[key])} className={ratings[key]===undefined?"unset":undefined} type="range" min="1" max="5" step="1" value={ratings[key]??3} onPointerDown={()=>{if(ratings[key]===undefined)setRatings(current=>({...current,[key]:3}));}} onChange={event=>setRatings(current=>({...current,[key]:rating(Number(event.target.value))}))}/><button type="button" aria-label={`${copy.fields[key]} ${ratings[key]===undefined?copy.optional:copy.clear}`} onClick={()=>setRatings(current=>({...current,[key]:current[key]===undefined?3:undefined}))}>{ratings[key]??copy.optional}</button></div>)}</section>
+    <label className="feedback-notes">{copy.notes}<textarea value={notes} maxLength={500} rows={2} onChange={event=>setNotes(event.target.value)}/></label>
+    <div className="feedback-actions button-pair"><button type="button" className="secondary-button" disabled={saving} onClick={()=>submit()}>{saving?copy.saving:copy.save}</button><button type="button" className="primary-button" disabled={saving} onClick={()=>submit(true)}>{copy.saveAnalyze}</button></div>
+  </main>;
 }
