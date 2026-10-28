@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-10-28] [REQ-37b 步驟 D 進度] preflight 僅對已有 round-trip 的 Bean／準備／library metadata／Brew 欄位解除；checkpoint 預設欄位相容測試、排序與部分寫入重試測試、opt-in 本機 Supabase E2E 測試已補。lint 無 warning、typecheck、72 檔／1002 tests（E2E 預設 skip）、webpack build 通過。實際 E2E 尚未執行：目前 Windows 工作階段沒有 Docker daemon pipe；嘗試背景啟動已安裝 Docker Desktop 後仍不可用。沒有執行雲端操作；D 尚未 commit/push，第三項未勾。（未完成）
+
 - [2026-10-28] [批次 4 解除阻塞／線 1＋線 2] 依清單並行工作已核對完成：線 1 本機 Supabase 恢復、reset／SQL 驗證及 advisors/type generation 見 `5c03635`；線 2 mapper／owner-scoped repositories/gateway 與 fake-client round-trip 見 `1a5bc62`，寫入順序與 fail-stop 測試亦在該 commit。Claude 的解除阻塞清單已補上對應 hash。全程僅本機，未連雲端；接續既有步驟 D。（5c03635；1a5bc62）
 
 - [2026-10-28] [REQ-37b 步驟 C] mapper/repository/gateway 已 push，請立即深度審查。完整與 legacy Brew、Bean/preparation tombstone、registry-history、privacy whitelist round-trip 測試；寫入依 beans → preparations → brews → suggested_plans → library_states，失敗即停；profile preferences 在建立時複製、更新時 merge。lint 無警告、typecheck、72 檔／999 tests、webpack build 全通過。B 本機驗證見 batch-4-b-local-blocker.md。接續 D；沒有解鎖雲端操作、未部署。（1a5bc62）
