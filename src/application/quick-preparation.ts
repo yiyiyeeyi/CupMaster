@@ -13,6 +13,7 @@ export function preparationFromRecipe(recipe: Recipe): PreparationSeed {
 }
 export function switchPreparationRecipe(seed: PreparationSeed, recipe: Recipe): PreparationSeed {
   const next = preparationFromRecipe(recipe);
+  if (seed.beanId) next.beanId=seed.beanId;
   if (seed.snapshot.grind) next.snapshot.grind=structuredClone(seed.snapshot.grind);
   if (seed.snapshot.bean) next.snapshot.bean = structuredClone(seed.snapshot.bean);
   if (seed.snapshot.equipment) next.snapshot.equipment = { ...structuredClone(seed.snapshot.equipment), dripper: next.snapshot.dripper.value };
@@ -24,7 +25,7 @@ export function switchPreparationRecipe(seed: PreparationSeed, recipe: Recipe): 
 export function resolveQuickPreparation(brews: Brew[], recipes: Recipe[]): PreparationSeed | null {
   const last = brews.filter(brew => !brew.legacyPreparationId && ["completed", "abandoned"].includes(brew.executionStatus))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))[0];
-  if (last) return { snapshot: structuredClone(last.recipeSnapshot), plan: structuredClone(last.brewPlan), sourceBrewId: last.id, appliedAdjustment: null };
+  if (last) return { ...(last.beanId && {beanId:last.beanId}), snapshot: structuredClone(last.recipeSnapshot), plan: structuredClone(last.brewPlan), sourceBrewId: last.id, appliedAdjustment: null };
   const recipe = beginnerRecipe(recipes);
   return recipe ? preparationFromRecipe(recipe) : null;
 }

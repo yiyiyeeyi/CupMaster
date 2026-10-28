@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const prepareEntryQuerySchema = z.object({
+  beanId:z.string().min(1).optional(),
   sourceBrewId: z.string().min(1).optional(), recommendationId: z.string().min(1).optional(), preparationId: z.string().min(1).optional(),
   entry: z.literal("quick").optional(), returnTo: z.string().optional(),
 }).superRefine((value, context) => {

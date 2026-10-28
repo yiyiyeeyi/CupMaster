@@ -1,3 +1,4 @@
+import { LocalBeanRepository } from "./local-bean-repository";
 import { z } from "zod";
 import { brewPersistenceSchema, brewPlanSchema, brewRecipeSnapshotSchema } from "@/data/local-brew-schema";
 import { appliedBrewAdjustmentSchema, applyBrewAdjustment, synchronizePreparation, isValidPreparation, type AppliedBrewAdjustment, type BrewPreparation } from "@/domain/brew-preparation";
@@ -5,7 +6,7 @@ import { suggestedBrewPlanSchema } from "@/domain/suggested-plan";
 import { localSuggestedPlanShapeSchema, migrateSuggestedPlanCandidate } from "@/data/local-suggested-plan-schema";
 
 export const BREW_PREPARATIONS_KEY = "cupmaster:brew-preparations";
-const entrySchema = z.object({ id: z.string(), snapshot: brewRecipeSnapshotSchema, plan: brewPlanSchema, sourceBrewId: z.string().nullable(),
+const entrySchema = z.object({ beanId:z.string().min(1).optional(), id: z.string(), snapshot: brewRecipeSnapshotSchema, plan: brewPlanSchema, sourceBrewId: z.string().nullable(),
   appliedAdjustment: appliedBrewAdjustmentSchema.nullable(), createdAt: z.string().datetime(), updatedAt: z.string().datetime(), legacyPlanId: z.string().optional(), legacyBrewId: z.string().optional() });
 const stateSchema = z.object({ version: z.literal(1), entries: z.array(entrySchema), redirects: z.record(z.string(), z.string()),
   lineage: z.record(z.string(), z.object({ sourceBrewId: z.string().nullable(), appliedAdjustment: appliedBrewAdjustmentSchema.nullable() })),
@@ -28,11 +29,12 @@ export class LocalBrewPreparationRepository {
   }
   save(seed: BrewPreparation, id: string, at: string) {
     seed = synchronizePreparation(seed);
+    if(seed.beanId){const catalog=new LocalBeanRepository(this.storage).read();if(!catalog.ok || !catalog.value.beans.some(bean=>bean.id===seed.beanId && !bean.deletedAt))delete seed.beanId;}
     if (!isValidPreparation(seed)) return { ok: false as const, message: "請檢查沖煮參數與階段秒數。" };
     const read = this.read(); if (!read.ok) return read;
     if (read.value.deletedIds.includes(id)) return { ok: false as const, message: "這份準備紀錄已刪除，請返回 Journal。" };
     const existing = read.value.entries.find(entry => entry.id === id);
-    const entry = entrySchema.safeParse({ ...existing, ...seed, id, createdAt: existing?.createdAt ?? at, updatedAt: at });
+    const entry = entrySchema.safeParse({ ...existing, ...seed, beanId:seed.beanId, id, createdAt: existing?.createdAt ?? at, updatedAt: at });
     if (!entry.success) return { ok: false as const, message: "準備資料不完整，未保存。" };
     return this.write({ ...read.value, entries: [...read.value.entries.filter(item => item.id !== id), entry.data] });
   }

@@ -8,6 +8,7 @@ export interface MigrationReviewSummary {
 }
 
 export type MigrationReviewWarningCode =
+  | "beans_unavailable"
   | "profile_missing"
   | "profile_unavailable"
   | "recipes_unavailable"

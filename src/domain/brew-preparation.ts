@@ -18,7 +18,7 @@ export const appliedBrewAdjustmentSchema = z.object({ version: z.literal(1), adj
   appliedValue: scalar.optional(),
 });
 export type AppliedBrewAdjustment = z.infer<typeof appliedBrewAdjustmentSchema>;
-export interface BrewPreparation { snapshot: BrewRecipeSnapshot; plan: BrewPlan; sourceBrewId: string | null; appliedAdjustment: AppliedBrewAdjustment | null; }
+export interface BrewPreparation { beanId?: string; snapshot: BrewRecipeSnapshot; plan: BrewPlan; sourceBrewId: string | null; appliedAdjustment: AppliedBrewAdjustment | null; }
 export interface SavedBrewPreparation extends BrewPreparation { id: string; createdAt: string; updatedAt: string; legacyPlanId?: string; legacyBrewId?: string; }
 export function isValidPreparation(seed: BrewPreparation) {
   const s = seed.snapshot;

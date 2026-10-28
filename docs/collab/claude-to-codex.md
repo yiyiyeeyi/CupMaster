@@ -111,7 +111,7 @@ Claude 已直接改（未 commit，在工作區，請驗證後併入下一個 co
 
 - [x] **P1 雲端遷移會悄悄丟資料**：`src/domain/cloud-migration.ts` 的 preflight 只擋 appliedAdjustment／legacyPreparationId／sourcePreparationId。批次 1 新增的本機欄位（RecipeStep／BrewStage.pourMethod、snapshot／plan 的 brewTemperatureMode、iceGrams、equipment.grinderSetting、equipment.accessories、plan.equipment）雲端 mapper 都還沒有，現在登入做 migration 會把這些欄位直接丟掉。在 REQ-37b 之前，preflight 遇到任一欄位有值就同樣擋下並說明「保留本機」。補測試：每個欄位各一筆。（a6ae312；研磨由 A 承接）
 - [x] **P1 build 設定**：package.json 的 `next build` 在 Next 16 預設用 Turbopack，你本機會卡住，目前只用 `--webpack` 驗證過。查清楚是本機記憶體問題還是專案問題；部署環境若也用預設 build，要嘛確認 Turbopack 在那裡能過，要嘛把 build script 固定成 `next build --webpack`。結論寫進 handoff。（a6ae312；研磨由 A 承接）
-- [ ] **P2 研磨有兩個真實來源**：`snapshot.grindDescription`（user_override）與 `equipment.grinderSetting` 同時存格數，換配方時已經在手動同步。定一個為準（建議 equipment.grinder＋grinderSetting），grindDescription 只由它推導；加測試保證兩者不會分歧。
+- [x] **P2 研磨有兩個真實來源**：`snapshot.grindDescription`（user_override）與 `equipment.grinderSetting` 同時存格數，換配方時已經在手動同步。定一個為準（建議 equipment.grinder＋grinderSetting），grindDescription 只由它推導；加測試保證兩者不會分歧。（539be23；由 A 結構化刻度取代）
 - [x] **P2 步驟有兩個注水欄位**：舊 `pattern`（center／spiral／pulse／continuous／immersion）和新 `pourMethod`（七種）重疊。寫一個明確的對應或標記 pattern 為 deprecated，REQ-37b 只同步一個。（a6ae312；研磨由 A 承接）
 - [x] **P2 Notion REQ-37b**：把上面所有新本機欄位，以及 profiles.preferences 的 displayNameConfirmed／experienceLevelSource，補進 REQ-37b 的 mapper 清單。（a6ae312；研磨由 A 承接）
 - （REQ-54 已記）新偏好資料損毀時需提供「重設偏好」路徑。
@@ -131,12 +131,12 @@ yiyi 查了品牌配方與 Reddit：使用者寫刻度的方式不只整數，�
 | B 複合刻度 | 同一個元件，依型號 2 或 3 欄 | K-Ultra `0.9.2`（圈．數字．小格）；Ode Gen 2 `5.1`（主刻度＋小格，5.1＝5 又 1/3，**不是小數 5.1**） | 1Zpresso K-Ultra、Fellow Ode Gen 2 |
 | C 自己輸入數字 | 數字鍵盤輸入框，可有小數點，不用滾輪，使用者不必先定義刻度表 | `2.5`、`12` | Eureka Mignon Specialità、所有自訂磨豆機、未知型號 |
 
-- [ ] 資料：一份磨豆機登錄表（`src/domain/grinders.ts` 之類），每台寫 id、顯示名稱、格式、單位或各欄名稱與範圍。只放上面 7 台，有來源的才加；未知型號一律 C。
-- [ ] 儲存：結構化，不存成可被誤算的小數。建議 `{ grinderId, format: "single" | "compound" | "number", parts?: number[], value?: number }`（C 存一個數字，可有小數；像「+1.5 圈」這種少見寫法放進這杯的筆記，不另做欄位）；顯示字串由它推導（`18 格`、`0.9.2`、`5.1`）。
-- [ ] 這就是研磨的唯一真實來源：`equipment.grinderSetting` 與 `snapshot.grindDescription` 改成由它推導或遷移掉，加測試保證不分歧。舊資料只有字串時，原字串保留在舊欄位當顯示用，不猜格式、不轉成數字。
-- [ ] Quick Prepare 的格數小選單依格式切換：A 一個數字滾輪；B 2／3 欄滾輪並排（同一個元件）；C 數字輸入框（inputmode="decimal"）。固定框邏輯不變。
-- [ ] 換磨豆機時：格式不同就清空刻度、提示「刻度格式不同，請重新設定」，不換算。μm 照舊不顯示。
-- [ ] 比較或排序只在同一台磨豆機內進行。
+- [x] 資料：一份磨豆機登錄表（`src/domain/grinders.ts` 之類），每台寫 id、顯示名稱、格式、單位或各欄名稱與範圍。只放上面 7 台，有來源的才加；未知型號一律 C。（539be23）
+- [x] 儲存：結構化，不存成可被誤算的小數。建議 `{ grinderId, format: "single" | "compound" | "number", parts?: number[], value?: number }`（C 存一個數字，可有小數；像「+1.5 圈」這種少見寫法放進這杯的筆記，不另做欄位）；顯示字串由它推導（`18 格`、`0.9.2`、`5.1`）。（539be23）
+- [x] 這就是研磨的唯一真實來源：`equipment.grinderSetting` 與 `snapshot.grindDescription` 改成由它推導或遷移掉，加測試保證不分歧。舊資料只有字串時，原字串保留在舊欄位當顯示用，不猜格式、不轉成數字。（539be23）
+- [x] Quick Prepare 的格數小選單依格式切換：A 一個數字滾輪；B 2／3 欄滾輪並排（同一個元件）；C 數字輸入框（inputmode="decimal"）。固定框邏輯不變。（539be23）
+- [x] 換磨豆機時：格式不同就清空刻度、提示「刻度格式不同，請重新設定」，不換算。μm 照舊不顯示。（539be23）
+- [x] 比較或排序只在同一台磨豆機內進行。（539be23）
 
 ### 步驟 B：豆子資料（新增本機實體）
 

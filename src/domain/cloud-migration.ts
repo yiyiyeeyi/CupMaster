@@ -34,14 +34,14 @@ export function transitionMigrationCheckpoint(checkpoint: CloudMigrationCheckpoi
   return cloudMigrationCheckpointSchema.parse(candidate);
 }
 
-export type MigrationGraphErrorCode = "unsupported_local_preparation" | "duplicate_brew_id" | "duplicate_plan_id" | "missing_source_brew" | "missing_source_analysis" | "missing_resulting_brew" | "missing_source_plan" | "mapping_mismatch" | "duplicate_resulting_brew" | "invalid_plan_state" | "result_metadata_mismatch" | "cycle_detected";
+export type MigrationGraphErrorCode = "unsupported_local_beans" | "unsupported_local_preparation" | "duplicate_brew_id" | "duplicate_plan_id" | "missing_source_brew" | "missing_source_analysis" | "missing_resulting_brew" | "missing_source_plan" | "mapping_mismatch" | "duplicate_resulting_brew" | "invalid_plan_state" | "result_metadata_mismatch" | "cycle_detected";
 export interface MigrationGraphError { code: MigrationGraphErrorCode; entityId: string; message: string; }
-export interface LocalCloudMigrationGraph { profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
+export interface LocalCloudMigrationGraph { beans?:readonly unknown[]; beanCatalogUnavailable?:boolean; profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
 
 /** Fail closed until REQ-37b can preserve every optional local field. */
 export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
   const snapshot=brew.recipeSnapshot, plan=brew.brewPlan;
-  return snapshot.grind !== undefined || plan.grind !== undefined || snapshot.equipment?.grinderId !== undefined || brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
+  return !!snapshot.bean && Object.entries(snapshot.bean).some(([key,value])=>key!=="id" && key!=="name" && value!==undefined) || brew.beanId !== undefined || snapshot.grind !== undefined || plan.grind !== undefined || snapshot.equipment?.grinderId !== undefined || brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
     || snapshot.brewTemperatureMode !== undefined || snapshot.iceGrams !== undefined
     || plan.brewTemperatureMode !== undefined || plan.iceGrams !== undefined || plan.equipment !== undefined
     || snapshot.equipment?.grinderSetting !== undefined || snapshot.equipment?.accessories !== undefined
@@ -50,6 +50,7 @@ export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
 
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
+  if(input.beanCatalogUnavailable || input.beans?.length)errors.push({code:"unsupported_local_beans",entityId:"bean-catalog",message:"豆子庫尚未支援雲端搬移；保留本機，請待 REQ-37b。"});
   for (const brew of input.brews) if (hasUnmappedLocalBrewFields(brew)) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "這筆紀錄含尚未支援雲端搬移的欄位；保留本機，請待 REQ-37b。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);

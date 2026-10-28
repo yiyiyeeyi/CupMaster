@@ -1,3 +1,4 @@
+import { LocalBeanRepository } from "@/repositories/local-bean-repository";
 import type { Brew } from "@/domain";
 import { brewPersistenceSchema } from "@/data/local-brew-schema";
 import { isAnalysisOutdated } from "@/domain";
@@ -9,7 +10,7 @@ import { createUniqueId } from "./brew-factory";
 
 export class BrewPreparationService {
   constructor(private readonly brews: BrewRepository, private readonly preparations: LocalBrewPreparationRepository,
-    private readonly id: () => string = createUniqueId, private readonly now: () => string = () => new Date().toISOString()) {}
+    private readonly id: () => string = createUniqueId, private readonly now: () => string = () => new Date().toISOString(), private readonly beans = new LocalBeanRepository()) {}
   load(input: { sourceBrewId?: string; recommendationId?: string; preparationId?: string }) {
     const migrated = this.preparations.migrate(); if (!migrated.ok) return migrated;
     if (input.preparationId) {
@@ -20,7 +21,7 @@ export class BrewPreparationService {
     if (!read.ok) return { ok: false as const, message: read.message };
     if (!read.value || read.value.executionStatus !== "completed") return { ok: false as const, message: "請從已完成的 Brew 開始。" };
     const brew = read.value;
-    let value: BrewPreparation = { snapshot: structuredClone(brew.recipeSnapshot), plan: structuredClone(brew.brewPlan), sourceBrewId: brew.id, appliedAdjustment: null };
+    let value: BrewPreparation = { ...(brew.beanId && {beanId:brew.beanId}), snapshot: structuredClone(brew.recipeSnapshot), plan: structuredClone(brew.brewPlan), sourceBrewId: brew.id, appliedAdjustment: null };
     if (input.recommendationId) {
       const analysis = brew.analysis, recommendation = analysis?.result.recommendations.find(item => item.id === input.recommendationId);
       if (!analysis || !recommendation) return { ok: false as const, message: "找不到這條建議。" };
@@ -39,8 +40,9 @@ export class BrewPreparationService {
       if (!read.value.entries.some(entry => entry.id === sourcePreparationId)) return { ok: false as const, message: "找不到準備紀錄，請返回 Journal。" };
     }
     const normalized = synchronizePreparation(seed), at = this.now();
+    if(normalized.beanId){const catalog=this.beans.read();if(!catalog.ok || !catalog.value.beans.some(bean=>bean.id===normalized.beanId && !bean.deletedAt))delete normalized.beanId;}
     if (!isValidPreparation(normalized)) return { ok: false as const, message: "請檢查沖煮參數與階段秒數。" };
-    const draft: Brew = { id: this.id(), ...(sourcePreparationId && { sourcePreparationId }), sourceRecipeId: normalized.plan.sourceRecipeId, sourceType: seed.sourceBrewId ? "previous_brew" : "recipe", sourceBrewId: seed.sourceBrewId ?? undefined,
+    const draft: Brew = { ...(normalized.beanId && {beanId:normalized.beanId}), id: this.id(), ...(sourcePreparationId && { sourcePreparationId }), sourceRecipeId: normalized.plan.sourceRecipeId, sourceType: seed.sourceBrewId ? "previous_brew" : "recipe", sourceBrewId: seed.sourceBrewId ?? undefined,
       ...(seed.sourceBrewId || seed.appliedAdjustment ? { appliedAdjustment: normalized.appliedAdjustment } : {}), suggestedPlanHandoff: null, brewPlan: { ...normalized.plan, id: this.id(), createdAt: at },
       recipeSnapshot: { ...normalized.snapshot, createdAt: at }, executionStatus: "not_started", recordStatus: "draft", feedbackStatus: "not_requested",
       analysisStatus: "not_requested", analysis: null, analysisAttempt: null, currentStageOrder: 0, currentStageStartedAt: null, stageResults: [],

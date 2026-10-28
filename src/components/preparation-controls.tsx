@@ -1,4 +1,6 @@
 "use client";
+import { BeanPicker } from "./bean-picker";
+import { selectPreparationBean } from "@/application/bean-service";
 import { useState } from "react";
 import type { BrewRecipeSnapshot, Recipe } from "@/domain";
 import type { PreparationSeed } from "@/application/quick-preparation";
@@ -46,7 +48,7 @@ export function PreparationControls({seed,onChange,recipes,onRecipe}:{seed:Prepa
   const accessoryOptions=unique([...(gear?.accessories ?? []),...customAccessories]);
   function accessory(value:string){patch(snapshot=>{const g=equipment(snapshot),previous=g.accessories ?? [];g.accessories=previous.includes(value)?previous.filter(item=>item!==value):[...previous,value];});}
   return <>
-    <div className="prepare-identities"><label>{copy.bean}<input maxLength={100} placeholder={copy.noBean} value={s.bean?.name ?? ""} onChange={event=>patch(snapshot=>{if(event.target.value.trim())snapshot.bean={id:`local-bean:${event.target.value.trim()}`,name:event.target.value};else delete snapshot.bean;})}/></label>
+    <div className="prepare-identities"><BeanPicker name={s.bean?.name} beanId={seed.beanId} onSelect={bean=>onChange(selectPreparationBean(seed,bean))} onClear={()=>{const next=structuredClone(seed);delete next.beanId;delete next.snapshot.bean;onChange({...next,...synchronizePreparation(next)});}}/>
       <div><span>{copy.recipe}</span><PreparePicker label={copy.recipe} value={seed.plan.sourceRecipeId} options={recipes.map(recipe=>({value:recipe.id,label:recipe.currentVersion.title}))} onChange={value=>{const selected=recipes.find(recipe=>recipe.id===value);if(selected)onRecipe(selected);}} onClose={noop}><span>{s.title}</span></PreparePicker></div>
     </div>
     <section className="prepare-group"><header><h2>{copy.ratio}</h2><div className={changed?"prepare-ratio-changed":""}>{changed && <><s>{ratio(defaults.dose,defaults.water)}</s> → </>}{ratio(amounts.dose,amounts.water)} {changed?copy.changed:copy.auto}{changed && <button type="button" onClick={()=>onChange(applyPrepareAmounts(seed,restorePrepareAmounts(amounts,defaults)))}>{copy.restore}</button>}</div></header>

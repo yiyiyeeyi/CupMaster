@@ -23,8 +23,10 @@ export class MigrationReviewService {
     if (!planRead.ok) repositoryWarnings.push({ code: "plans_unavailable", entityId: null, title: "Suggested Plans", message: planRead.message });
     if (brewRead.ok && brewRead.notice) repositoryWarnings.push({ code: "legacy_data", entityId: null, title: "Brews", message: brewRead.notice });
     if (planRead.ok && planRead.notice) repositoryWarnings.push({ code: "legacy_data", entityId: null, title: "Suggested Plans", message: planRead.notice });
+    const beans=this.repositories.beanRepository?.read();
+    if(beans && !beans.ok)repositoryWarnings.push({code:"beans_unavailable",entityId:null,title:"Bean 庫",message:beans.message});
     const profile = profileRead.status === "found" ? profileRead.value : null;
-    const graph = { profile, brews: brewRead.value, suggestedPlans: planRead.value };
+    const graph = { ...(beans && !beans.ok && {beanCatalogUnavailable:true}), ...(beans?.ok && {beans:beans.value.beans}), profile, brews: brewRead.value, suggestedPlans: planRead.value };
     return { graph, summary: { profile: profile ? 1 : 0, recipes, brews: brewRead.value.length, suggestedPlans: planRead.value.length }, repositoryWarnings };
   }
 

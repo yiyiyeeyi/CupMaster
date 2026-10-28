@@ -1,3 +1,4 @@
+import type { BeanSnapshot } from "./beans";
 import type { GrindSetting } from "./grinders";
 import type { AppliedBrewAdjustment } from "./brew-preparation";
 import type { BrewAnalysis, BrewAnalysisAttempt } from "./brew-analysis";
@@ -63,7 +64,7 @@ export interface BrewRecipeSnapshot {
   expectedTimeSeconds: SourcedValue<number>;
   steps: RecipeStep[];
   userOverrides: Partial<Record<"doseGrams" | "totalWaterGrams" | "temperatureCelsius" | "grindDescription" | "dripper", string | number>>;
-  bean?: { id: Id; name: string };
+  bean?: BeanSnapshot;
   equipment?: PreparationGear & { equipmentId?: Id; dripper: string; notes?: string };
   userGoal?: string;
   createdAt: ISODateTime;
@@ -73,7 +74,7 @@ export interface BrewBeanDetails { name?: string; roaster?: string; origin?: str
 export interface BrewEquipmentDetails { dripper?: string; grinder?: string; grinderSetting?: string; kettle?: string; filter?: string; }
 export interface BrewRecordDetails { bean: BrewBeanDetails | null; equipment: BrewEquipmentDetails | null; actualDoseGrams: number | null; actualWaterGrams: number | null; actualTemperatureCelsius: number | null; notes: string | null; createdAt: ISODateTime; updatedAt: ISODateTime; }
 export interface BrewRecordDetailsInput { bean?: Partial<Record<keyof BrewBeanDetails, string | null>> | null; equipment?: Partial<Record<keyof BrewEquipmentDetails, string | null>> | null; actualDoseGrams?: number | null; actualWaterGrams?: number | null; actualTemperatureCelsius?: number | null; notes?: string | null; }
-export interface Brew { sourcePreparationId?: string; appliedAdjustment?: AppliedBrewAdjustment | null; legacyPreparationId?: string; executionRun?: number; currentStagePausedSeconds?: number; id: Id; sourceRecipeId: Id; brewPlan: BrewPlan; recipeSnapshot: BrewRecipeSnapshot; executionStatus: BrewExecutionStatus; recordStatus: BrewRecordStatus; feedbackStatus: BrewFeedbackStatus; analysisStatus: BrewAnalysisStatus; analysis: BrewAnalysis | null; analysisAttempt: BrewAnalysisAttempt | null; currentStageOrder: number; currentStageStartedAt: ISODateTime | null; stageResults: BrewStageResult[]; quickRating?: BrewQuickRating; flavorFeedback: FlavorFeedback | null; recordDetails: BrewRecordDetails | null; actualTotalTimeSeconds: number | null; actualTotalWater: number | null; startedAt: ISODateTime | null; completedAt: ISODateTime | null; pausedAt: ISODateTime | null; accumulatedPauseSeconds: number; createdAt: ISODateTime; updatedAt: ISODateTime; }
+export interface Brew { beanId?: string; sourcePreparationId?: string; appliedAdjustment?: AppliedBrewAdjustment | null; legacyPreparationId?: string; executionRun?: number; currentStagePausedSeconds?: number; id: Id; sourceRecipeId: Id; brewPlan: BrewPlan; recipeSnapshot: BrewRecipeSnapshot; executionStatus: BrewExecutionStatus; recordStatus: BrewRecordStatus; feedbackStatus: BrewFeedbackStatus; analysisStatus: BrewAnalysisStatus; analysis: BrewAnalysis | null; analysisAttempt: BrewAnalysisAttempt | null; currentStageOrder: number; currentStageStartedAt: ISODateTime | null; stageResults: BrewStageResult[]; quickRating?: BrewQuickRating; flavorFeedback: FlavorFeedback | null; recordDetails: BrewRecordDetails | null; actualTotalTimeSeconds: number | null; actualTotalWater: number | null; startedAt: ISODateTime | null; completedAt: ISODateTime | null; pausedAt: ISODateTime | null; accumulatedPauseSeconds: number; createdAt: ISODateTime; updatedAt: ISODateTime; }
 export interface FlavorFeedback { id: Id; brewId: Id; overallImpression: FlavorOverallImpression; acidity?: FlavorRating; sweetness?: FlavorRating; bitterness?: FlavorRating; body?: FlavorRating; clarity?: FlavorRating; aftertaste?: FlavorRating; balance?: FlavorRating; flavorNotes: FlavorNote[]; freeformNotes?: string; createdAt: ISODateTime; updatedAt: ISODateTime; }
 export type FlavorFeedbackInput = Omit<FlavorFeedback, "id" | "brewId" | "createdAt" | "updatedAt">;
 export interface InsightEvidence { source: "brew_parameter" | "stage_result" | "flavor_feedback" | "user_note"; reference: string; value: string | number | boolean; }
