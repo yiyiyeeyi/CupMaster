@@ -3,6 +3,7 @@ import {LocalBeanRepository} from "@/repositories/local-bean-repository";
 import {LocalBrewRepository} from "@/repositories/local-brew-repository";
 import {LocalBrewPreparationRepository} from "@/repositories/local-brew-preparation-repository";
 import {BeanService} from "./bean-service";
+import {bestStars} from "@/domain/brew-ratings";
 export class CollectionService{
   constructor(private readonly beans=new LocalBeanRepository(),private readonly brews=new LocalBrewRepository(),private readonly preparations=new LocalBrewPreparationRepository()){}
   load(){
@@ -11,7 +12,7 @@ export class CollectionService{
     const preparations=this.preparations.read();
     const active=beans.value.beans.filter(bean=>!bean.deletedAt);
     return{ok:true as const,value:{beans:active,allBeans:beans.value.beans,brews:brews.value,brewWarning:brews.notice,
-      cards:active.map(bean=>({bean,count:brews.notice?undefined:beanBrews(bean,beans.value.beans,brews.value).length})),
+      cards:active.map(bean=>{const records=beanBrews(bean,beans.value.beans,brews.value);return {bean,count:brews.notice?undefined:records.length,best:brews.notice?undefined:bestStars(records)};}),
       preparations:preparations.ok?preparations.value.entries:[],preparationError:preparations.ok?null:preparations.message,
       candidates:beans.value.legacyImportReviewed?[]:legacyBeanCandidates(brews.value,beans.value.beans),
       pending:beans.value.beans.filter(bean=>bean.unlinkPending),

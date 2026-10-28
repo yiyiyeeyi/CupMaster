@@ -27,6 +27,6 @@ export function BrewSteps({ steps, results, startedAt }: { steps: RecipeStep[]; 
     const {actual,difference}=brewStepTiming(steps,step.id,results??[],startedAt);
     const canonical = effectivePourMethod(step);
     const method = canonical ? copy.pourMethods[canonical] : step.pattern ? copy.patterns[step.pattern] : undefined;
-    return <li key={step.id}><span className="brew-step-icon" aria-hidden="true">{step.pourMethod === "drain" ? "⋮" : "◎"}</span><div><h3>{step.title}<time>{formatDuration(actual ?? planned)}</time>{difference!==undefined&&difference!==0&&<span className="brew-step-difference">{difference>0?copy.late:copy.early} {Math.abs(difference)} {copy.seconds}</span>}</h3>{method && <p>{method}</p>}<p>{step.instruction}</p></div><strong aria-label={copy.target}>{step.targetWaterGrams}<small> g</small></strong></li>;
+    return <li key={step.id}><span className="brew-step-icon" aria-hidden="true">{step.pourMethod === "drain" ? "⋮" : "◎"}</span><div><h3>{step.title}{(results===undefined||actual!==undefined)&&<time>{formatDuration(actual ?? planned)}</time>}{difference!==undefined&&difference!==0&&<span className="brew-step-difference">{difference>0?copy.late:copy.early} {Math.abs(difference)} {copy.seconds}</span>}</h3>{method && <p>{method}</p>}<p>{step.instruction}</p></div><strong aria-label={copy.target}>{step.targetWaterGrams}<small> g</small></strong></li>;
   })}</ol></section>;
 }

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {previousRatingDelta} from "@/domain/brew-ratings";
 import { BrewJournalRow } from "./brew-journal-row";
 import { groupJournal, journalDateKey, journalFilter, type JournalFilter, type JournalItem } from "@/domain/journal";
 import type { SavedBrewPreparation } from "@/domain/brew-preparation";
@@ -58,7 +59,7 @@ export function JournalHome() {
       </div></article>;
     }
     const brew = item.brew;
-    return <BrewJournalRow key={brew.id} brew={brew}/>;
+    return <BrewJournalRow key={brew.id} brew={brew} delta={data?.brewNotice?undefined:previousRatingDelta(brew,data?.brews??[],data?.beans??[])}/>;
 
   }
   const failed = !!data && (filter !== "preparations" && !!data.brewError || filter !== "completed" && !!data.preparationError);

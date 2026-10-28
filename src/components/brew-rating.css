@@ -1,0 +1,1 @@
+.brew-rating { display:inline-flex; align-items:center; gap:6px; font:400 12px/1.6 var(--ui); color:var(--ink); }.brew-rating .rating-up { color:var(--green); }.brew-rating .rating-down { color:var(--accent); }.journal-brew-row .brew-rating { margin-top:5px; font-size:11px; }.bean-best-rating { margin-left:12px; white-space:nowrap; }
