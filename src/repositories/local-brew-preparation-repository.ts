@@ -12,6 +12,7 @@ const stateSchema = z.object({ version: z.literal(1), entries: z.array(entrySche
   lineage: z.record(z.string(), z.object({ sourceBrewId: z.string().nullable(), appliedAdjustment: appliedBrewAdjustmentSchema.nullable() })),
   processedRaw: z.string().nullable(), backups: z.array(z.object({ plans: z.string(), brews: z.string().nullable() })), warnings: z.array(z.string()), deletedIds: z.array(z.string()).default([]) });
 type State = z.infer<typeof stateSchema>;
+export type BrewPreparationLibraryState = State;
 type Port = Pick<Storage, "getItem" | "setItem">;
 const empty = (): State => ({ version: 1, entries: [], redirects: {}, lineage: {}, processedRaw: null, backups: [], warnings: [], deletedIds: [] });
 export class LocalBrewPreparationRepository {
@@ -21,6 +22,7 @@ export class LocalBrewPreparationRepository {
     try { const raw = this.port().getItem(BREW_PREPARATIONS_KEY); return { ok: true, value: raw ? stateSchema.parse(JSON.parse(raw)) : empty() }; }
     catch { return { ok: false, message: "無法讀取準備紀錄，原資料已保留。" }; }
   }
+  readForMigration() { return this.read(); }
   private write(value: State) {
     try { const validated = stateSchema.parse(value); this.port().setItem(BREW_PREPARATIONS_KEY, JSON.stringify(validated));
       if (this.port().getItem(BREW_PREPARATIONS_KEY) !== JSON.stringify(validated)) throw new Error("readback");

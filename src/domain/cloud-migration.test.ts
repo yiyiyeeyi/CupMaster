@@ -35,10 +35,10 @@ describe("migration graph validation", () => {
     ["feedback without legacy impression", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
     ["step method", (b:Brew)=>{b.recipeSnapshot.steps[0].pourMethod="drain";}],
     ["stage method", (b:Brew)=>{b.brewPlan.stages[0].pourMethod="outward";}],
-  ] as const)("blocks unmapped %s before cloud writes",(_,change)=>{
+  ] as const)("accepts round-trip covered %s",(_,change)=>{
     const graph=validGraph();change(graph.brews[0]);const before=structuredClone(graph);
     const result=validateLocalCloudMigrationGraph(graph);
-    expect(result.valid).toBe(false);expect(result.errors).toContainEqual(expect.objectContaining({code:"unsupported_local_preparation",message:expect.stringContaining("保留本機")}));expect(graph).toEqual(before);
+    expect(result.valid).toBe(true);expect(graph).toEqual(before);
   });
 
   it("accepts an empty graph and a valid linked graph", () => { expect(validateLocalCloudMigrationGraph({ profile: null, brews: [], suggestedPlans: [] }).valid).toBe(true); expect(validateLocalCloudMigrationGraph(validGraph()).valid).toBe(true); });

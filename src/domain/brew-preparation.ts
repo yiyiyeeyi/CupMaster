@@ -20,6 +20,7 @@ export const appliedBrewAdjustmentSchema = z.object({ version: z.literal(1), adj
 export type AppliedBrewAdjustment = z.infer<typeof appliedBrewAdjustmentSchema>;
 export interface BrewPreparation { beanId?: string; snapshot: BrewRecipeSnapshot; plan: BrewPlan; sourceBrewId: string | null; appliedAdjustment: AppliedBrewAdjustment | null; }
 export interface SavedBrewPreparation extends BrewPreparation { id: string; createdAt: string; updatedAt: string; legacyPlanId?: string; legacyBrewId?: string; }
+export interface PreparationSyncRecord { id:string; entry:SavedBrewPreparation|null; deletedAt:string|null; }
 export function isValidPreparation(seed: BrewPreparation) {
   const s = seed.snapshot;
   return (s.grind === undefined || grindSettingSchema.safeParse(s.grind).success) && prepareExtrasSchema.safeParse(s).success && preparationGearSchema.safeParse(s.equipment ?? {}).success && quickPrepareSchema.safeParse({ recipeVersionId: seed.plan.sourceRecipeId, coffeeDose: s.doseGrams.value, waterTotal: s.totalWaterGrams.value,

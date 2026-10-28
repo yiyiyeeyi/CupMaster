@@ -54,12 +54,12 @@ describe("local Bean catalog",()=>{
     const selected=selectPreparationBean(preparationFromRecipe(recipeFixtures[0]),saved.value);s.service.remove("bean");
     const created=s.brewService.create(selected);expect(created.ok).toBe(true);expect(created.ok&&created.value.beanId).toBeUndefined();expect(created.ok&&created.value.recipeSnapshot.bean?.name).toBe("Coffee");
   });
-  it("blocks both linked Brews and the standalone bean library from cloud migration",()=>{
+  it("allows round-trip covered Bean-linked Brews and the standalone bean library",()=>{
     const s=setup(),saved=s.beans.save({name:"Coffee"},"bean");if(!saved.ok)throw Error("setup");
     const created=s.brewService.create(selectPreparationBean(preparationFromRecipe(recipeFixtures[0]),saved.value));if(!created.ok)throw Error("setup");
-    expect(validateLocalCloudMigrationGraph({profile:null,brews:[created.value],suggestedPlans:[]}).valid).toBe(false);
+    expect(validateLocalCloudMigrationGraph({profile:null,brews:[created.value],suggestedPlans:[],beans:[saved.value]}).valid).toBe(true);
     expect(validateLocalCloudMigrationGraph({profile:null,brews:[],suggestedPlans:[],beanCatalogUnavailable:true}).valid).toBe(false);
-    const unlinked=structuredClone(created.value);delete unlinked.beanId;unlinked.recipeSnapshot.bean={id:"old",name:"Old",roaster:"R"};expect(validateLocalCloudMigrationGraph({profile:null,brews:[unlinked],suggestedPlans:[]}).valid).toBe(false);
-    expect(validateLocalCloudMigrationGraph({profile:null,brews:[],suggestedPlans:[],beans:[saved.value]}).errors).toContainEqual(expect.objectContaining({code:"unsupported_local_beans"}));
+    const unlinked=structuredClone(created.value);delete unlinked.beanId;unlinked.recipeSnapshot.bean={id:"old",name:"Old",roaster:"R"};expect(validateLocalCloudMigrationGraph({profile:null,brews:[unlinked],suggestedPlans:[]}).valid).toBe(true);
+    expect(validateLocalCloudMigrationGraph({profile:null,brews:[],suggestedPlans:[],beans:[saved.value]}).valid).toBe(true);
   });
 });

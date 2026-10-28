@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Brew } from "./types";
 import type { SuggestedBrewPlan } from "./suggested-plan";
+import type { BeanRecord } from "./beans";
+import type { PreparationSyncRecord } from "./brew-preparation";
 
 export const cloudMigrationErrorCodeSchema = z.enum([
   "migration_unavailable", "unauthenticated", "local_data_invalid", "remote_write_failed",
@@ -36,22 +38,21 @@ export function transitionMigrationCheckpoint(checkpoint: CloudMigrationCheckpoi
 
 export type MigrationGraphErrorCode = "unsupported_local_beans" | "unsupported_local_preparation" | "duplicate_brew_id" | "duplicate_plan_id" | "missing_source_brew" | "missing_source_analysis" | "missing_resulting_brew" | "missing_source_plan" | "mapping_mismatch" | "duplicate_resulting_brew" | "invalid_plan_state" | "result_metadata_mismatch" | "cycle_detected";
 export interface MigrationGraphError { code: MigrationGraphErrorCode; entityId: string; message: string; }
-export interface LocalCloudMigrationGraph { beans?:readonly unknown[]; beanCatalogUnavailable?:boolean; profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
+export interface LocalCloudMigrationGraph { beans?:readonly BeanRecord[]; beanCatalogUnavailable?:boolean; preparations?:readonly PreparationSyncRecord[]; preparationCatalogUnavailable?:boolean; libraryState?:unknown; profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
 
 /** Fail closed until REQ-37b can preserve every optional local field. */
 export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
-  const snapshot=brew.recipeSnapshot, plan=brew.brewPlan;
-  if(brew.flavorFeedback && (brew.flavorFeedback.stars!==undefined || brew.flavorFeedback.aroma!==undefined || brew.flavorFeedback.tasteTags!==undefined || brew.flavorFeedback.overallImpression===undefined))return true;
-  return !!snapshot.bean && Object.entries(snapshot.bean).some(([key,value])=>key!=="id" && key!=="name" && value!==undefined) || brew.beanId !== undefined || snapshot.grind !== undefined || plan.grind !== undefined || snapshot.equipment?.grinderId !== undefined || brew.appliedAdjustment !== undefined || !!brew.legacyPreparationId || !!brew.sourcePreparationId
-    || snapshot.brewTemperatureMode !== undefined || snapshot.iceGrams !== undefined
-    || plan.brewTemperatureMode !== undefined || plan.iceGrams !== undefined || plan.equipment !== undefined
-    || snapshot.equipment?.grinderSetting !== undefined || snapshot.equipment?.accessories !== undefined
-    || snapshot.steps.some(step=>step.pourMethod !== undefined) || plan.stages.some(stage=>stage.pourMethod !== undefined);
+  // REQ-37b round-trip coverage now preserves every known Brew field in JSONB
+  // or parity columns. Keep this named guard for callers and future additions.
+  void brew;
+  return false;
 }
 
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
-  if(input.beanCatalogUnavailable || input.beans?.length)errors.push({code:"unsupported_local_beans",entityId:"bean-catalog",message:"豆子庫尚未支援雲端搬移；保留本機，請待 REQ-37b。"});
+  if(input.beanCatalogUnavailable)errors.push({code:"unsupported_local_beans",entityId:"bean-catalog",message:"豆子庫無法讀取，保留本機並重試。"});
+  if(input.preparationCatalogUnavailable)errors.push({code:"unsupported_local_preparation",entityId:"preparation-catalog",message:"準備紀錄無法讀取，保留本機並重試。"});
+  const preparationIds=new Set<string>();for(const preparation of input.preparations??[]){if(preparationIds.has(preparation.id))errors.push({code:"unsupported_local_preparation",entityId:preparation.id,message:"準備紀錄 ID 重複，保留本機。"});preparationIds.add(preparation.id);}
   for (const brew of input.brews) if (hasUnmappedLocalBrewFields(brew)) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "這筆紀錄含尚未支援雲端搬移的欄位；保留本機，請待 REQ-37b。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);

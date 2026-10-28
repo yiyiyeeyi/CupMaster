@@ -4,11 +4,14 @@ export interface MigrationReviewSummary {
   profile: number;
   recipes: number;
   brews: number;
+  beans: number;
+  preparations: number;
   suggestedPlans: number;
 }
 
 export type MigrationReviewWarningCode =
   | "beans_unavailable"
+  | "preparations_unavailable"
   | "profile_missing"
   | "profile_unavailable"
   | "recipes_unavailable"

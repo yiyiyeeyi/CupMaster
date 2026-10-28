@@ -1,9 +1,9 @@
 import {ZodError,z} from "zod";
 import type {BeanRecord} from "@/domain/beans";
-import type {SavedBrewPreparation} from "@/domain/brew-preparation";
+import type {PreparationSyncRecord} from "@/domain/brew-preparation";
 import {beanRowSchema,preparationRowSchema,libraryStateRowSchema,libraryStatePayloadSchema,CloudMappingError} from "../cloud-row-schemas";
 export type LibraryStatePayload=z.infer<typeof libraryStatePayloadSchema>;
-export type PreparationRecord={id:string;entry:SavedBrewPreparation|null;deletedAt:string|null};
+export type PreparationRecord=PreparationSyncRecord;
 function parse<T>(schema:z.ZodType<T>,input:unknown):T{try{return schema.parse(input)}catch(error){if(error instanceof ZodError)throw new CloudMappingError("invalid_row",error.issues[0]?.message??"Stored row is invalid.");throw error}}
 /** Whitelist only sync metadata. Raw backups/processedRaw/warnings never leave the browser. */
 export function toLibraryStatePayload(input:unknown):LibraryStatePayload{return parse(libraryStatePayloadSchema,input);}

@@ -15,19 +15,20 @@ import { SupabaseUserProfileRepository } from "@/infrastructure/supabase/supabas
 import { SupabaseBrewRepository } from "@/infrastructure/supabase/supabase-brew-repository";
 import { SupabaseSuggestedPlanRepository } from "@/infrastructure/supabase/supabase-suggested-plan-repository";
 import { SupabaseParityRepository } from "@/infrastructure/supabase/supabase-parity-repository";
+import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
 
 export type RepositoryMode = "local" | "remote";
 export type RuntimeRepositoryPolicy = { mode: "local"; reason: "local_mvp" | "cloud_migration_not_completed" };
 export const RUNTIME_REPOSITORY_MODE = "local" as const;
 export const RUNTIME_REPOSITORY_POLICY: RuntimeRepositoryPolicy = { mode: RUNTIME_REPOSITORY_MODE, reason: "cloud_migration_not_completed" };
 
-export interface LocalRepositoryBundle { beanRepository?:LocalBeanRepository; userProfileRepository: UserProfileRepository; brewRepository: BrewRepository; suggestedPlanRepository: SuggestedPlanRepository; recipeRepository: RecipeRepository; }
+export interface LocalRepositoryBundle { beanRepository?:LocalBeanRepository; preparationRepository?:LocalBrewPreparationRepository; userProfileRepository: UserProfileRepository; brewRepository: BrewRepository; suggestedPlanRepository: SuggestedPlanRepository; recipeRepository: RecipeRepository; }
 export interface RemoteRepositoryBundle { userProfileRepository: RemoteUserProfileRepository; brewRepository: RemoteBrewRepository; suggestedPlanRepository: RemoteSuggestedPlanRepository; parityRepository?: RemoteParityRepository; }
 export interface MigrationRepositoryBundle { local: LocalRepositoryBundle; remote: RemoteRepositoryBundle; authenticatedUserId: string; }
 export type RemoteBundleResult = { ok: true; value: RemoteRepositoryBundle; authenticatedUserId: string } | { ok: false; code: "migration_unavailable" | "unauthenticated"; message: string };
 export type MigrationBundleResult = { ok: true; value: MigrationRepositoryBundle } | { ok: false; code: "migration_unavailable" | "unauthenticated"; message: string };
 
-export function createLocalRepositoryBundle(): LocalRepositoryBundle { return { beanRepository:new LocalBeanRepository(), userProfileRepository: new LocalUserProfileRepository(), brewRepository: new LocalBrewRepository(), suggestedPlanRepository: new LocalSuggestedPlanRepository(), recipeRepository: new MockRecipeRepository() }; }
+export function createLocalRepositoryBundle(): LocalRepositoryBundle { return { beanRepository:new LocalBeanRepository(), preparationRepository:new LocalBrewPreparationRepository(), userProfileRepository: new LocalUserProfileRepository(), brewRepository: new LocalBrewRepository(), suggestedPlanRepository: new LocalSuggestedPlanRepository(), recipeRepository: new MockRecipeRepository() }; }
 export function getRuntimeRepositoryBundle(): LocalRepositoryBundle { return createLocalRepositoryBundle(); }
 
 type ClientFactory = () => SupabaseClient<Database>;

@@ -44,7 +44,7 @@ export const brewRowSchema = z.object({
   if (row.source_type === "recipe" && row.suggested_plan_handoff) context.addIssue({ code: "custom", path: ["suggested_plan_handoff"], message: "Recipe source cannot contain Plan handoff." });
 });
 
-/** Runtime contracts until local gen types is available; never edit generated types by hand. */
+/** Runtime validation for migration columns; row and client types come from the locally generated Database contract. */
 export const brewParityColumnsSchema=z.object({bean_id:z.string().nullable(),source_preparation_id:z.string().nullable(),legacy_preparation_id:z.string().nullable(),applied_adjustment:z.json().nullable().transform(value=>value as Json|null),applied_adjustment_present:z.boolean()});
 export const storedBeanSchema=z.object({id:z.string().min(1),name:z.string().optional(),roaster:z.string().optional(),origin:z.string().optional(),process:z.string().optional(),roastLevel:z.string().optional(),farm:z.string().optional(),variety:z.string().optional(),roastDate:z.string().optional(),cropYear:z.string().optional(),altitude:z.string().optional(),agtron:z.number().finite().optional(),blend:z.string().optional(),flavors:z.array(z.string()).optional(),legacyKeys:z.array(z.string()).optional(),unlinkPending:z.boolean().optional(),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),deletedAt:z.string().datetime().optional()});
 export const storedPreparationSchema=z.object({id:z.string(),beanId:z.string().optional(),snapshot:brewRecipeSnapshotSchema,plan:brewPlanSchema,sourceBrewId:z.string().nullable(),appliedAdjustment:appliedBrewAdjustmentSchema.nullable(),createdAt:z.string().datetime(),updatedAt:z.string().datetime(),legacyPlanId:z.string().optional(),legacyBrewId:z.string().optional()});

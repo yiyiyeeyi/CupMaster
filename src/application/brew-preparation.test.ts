@@ -178,10 +178,10 @@ describe("local brew preparation", () => {
       expect(brews.getById(result.value.id).value?.sourceBrewId).toBe(value.sourceBrewId);
     }
   });
-  it("preserves new metadata locally and fails cloud preflight instead of dropping it or writing new tables", () => {
+  it("allows adjustment metadata after lossless cloud parity mapping", () => {
     const { value, metadata, service } = seed(), result = service.create(applyBrewAdjustment(value, metadata));
     if (!result.ok) throw new Error(result.message);
     const graph = validateLocalCloudMigrationGraph({ profile: null, brews: [result.value], suggestedPlans: [] });
-    expect(graph.errors).toContainEqual(expect.objectContaining({ code: "unsupported_local_preparation" }));
+    expect(graph.valid).toBe(true);
   });
 });
