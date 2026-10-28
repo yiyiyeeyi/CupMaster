@@ -210,3 +210,47 @@ A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新，handoff 寫在 docs/project/batch-3-*.md。全部做完在 codex-to-claude.md 寫「批次 3 完成」。不 merge main、不部署、不改 SQL／雲端。
+
+## 批次 3 審查結果（Claude，2026-10-28）
+
+步驟 B 深度審查：**通過，沒有必修項**。輸入 schema 要求 stars、儲存 schema 全選填；舊 overallImpression 不換算、不偽造；編輯舊紀錄保留 balance／flavorNotes／overallImpression；規則分析先 safeParse 再用；preflight 分欄位阻擋。A、C 也通過：早／晚不猜、編號不捏造流水號、比較只看緊接上一杯、rejected 時不顯示不完整的最佳值。
+
+系統面觀察（給下一批排序用）：
+- 現在幾乎所有新資料（刻度、豆子、beanId、冰沖、注水方式、星等、標籤、沒有 overallImpression 的新回饋）都會讓雲端搬移 fail closed。也就是說，用新版建立過紀錄的人，登入後搬移一定被擋。REQ-37b 已經從「之後做」變成「登入功能能不能用」的前提。
+- feature/camera-brew-runtime 已累積 REQ-4 到批次 3，很久沒進 main，也沒有任何部署驗證過 webpack build。合併／預覽部署由 yiyi 決定，不要自行做。
+
+## 批次 4：REQ-37b 雲端 schema＋mapper（yiyi 2026-10-28 決定做）
+
+目標：讓目前 preflight 擋下的所有本機資料都能**無損**搬上雲端，然後解除這些阻擋。持續雙向同步屬旅程 14／15，不在本批。
+本批全部屬於 schema／同步，**每一步完成 push 後都在 codex-to-claude.md 寫一行，Claude 立即深度審查**；你可以繼續下一步，但**步驟 E 一定要停下來**。
+
+**硬關卡：本批任何 SQL 只能套用在本機 Supabase。套用到雲端專案 ouniwzdxbcrektzynkak 必須等 Claude 審過 SQL、而且 yiyi 明確說「可以套用」。**
+
+### 步驟 A：盤點（寫在 docs/project/batch-4-a-inventory.md）
+- [ ] 以 `hasUnmappedLocalBrewFields` 和 `validateLocalCloudMigrationGraph` 目前擋下的每一項為清單，逐項標出它在雲端放哪裡：
+  - 放進既有 jsonb（recipe_snapshot、brew_plan、flavor_feedback、record_details）→ 只要改 mapper／雲端 zod，不需要 SQL。
+  - 需要新欄位或新表 → 列出 SQL。預期至少有：beans 表、brews.bean_id、brews 的 source_preparation_id／applied_adjustment／legacy_preparation_id、已存準備（下次想沖）的表。
+- [ ] 檢查雲端讀取端（remote repositories 的 zod）是否用了會擋新欄位的嚴格 schema；雲端讀取一律用「只驗形狀」的儲存 schema（同批次 2 刻度的教訓），不可因登錄表或新規則讓舊雲端資料讀不到。
+
+### 步驟 B：SQL migration（只寫檔、只在本機套用）
+- [ ] 新增 `supabase/migrations/<timestamp>_req37b_local_parity.sql`。新表都要：owner `user_id` 參照 auth.users、RLS 開啟且 select／insert／update 只限本人（照 profiles 的寫法）、`revision`、`created_at`／`updated_at`＋既有 set_updated_at trigger、`deleted_at` 軟刪除（豆子和準備都有 tombstone 語意），`user_id` 索引。
+- [ ] brews.bean_id：可為 null；用 (user_id, bean_id) 複合外鍵指到 beans(user_id, id)，確保不能連到別人的豆子。豆子刪除走軟刪除，不要 cascade 刪 brew。
+- [ ] 只新增，不改既有欄位型別、不刪欄位；可重複執行時不出錯（if not exists 能用就用）。
+- [ ] 本機 `supabase db reset` 套用全部 migration 成功；跑 Supabase advisors（security＋performance），結果貼進 handoff；重新產生 `src/types/database.types.ts`。
+- [ ] 你之前提過 Docker／WSL 很慢：本機 Supabase 起不來就停下來在 codex-to-claude.md 說明，不要改去碰雲端。
+
+### 步驟 C：mapper＋雲端 repository
+- [ ] 本機 → 雲端 → 本機 的 round-trip 測試：做一筆「每個選填欄位都有值」的完整 Brew（刻度三種格式各一、豆子快照全欄位、beanId、冰沖＋冰量、配件、每段 pourMethod、stars／aroma／tasteTags、無 overallImpression、appliedAdjustment、sourcePreparationId）、一包全欄位豆子（含已刪除 tombstone）、一筆已存準備，經 mapper 後必須 deep equal。
+- [ ] 舊資料 round-trip：只有 overallImpression、只有 legacy 刻度字串、只有 pattern 沒有 pourMethod 的舊 Brew，也要原樣回來。
+- [ ] profiles.preferences 的 displayNameConfirmed／experienceLevelSource 保留（既有 jsonb，不要覆寫其他 key）。
+
+### 步驟 D：解除 preflight
+- [ ] 只解除「已有 round-trip 測試覆蓋」的欄位；沒覆蓋到的繼續 fail closed。每解除一項，對應測試要從「被擋」改成「搬得上去且 round-trip 相等」。
+- [ ] 搬移順序：beans → preparations → brews（bean_id 才有對象）→ suggested_plans；中斷後用既有 checkpoint 冪等續跑，不重複建立。
+- [ ] 用本機 Supabase 跑一次完整搬移：模擬一位新版使用者（有豆子、三種刻度、星等、冰沖、已存準備），搬完在雲端讀回來，畫面上 Journal／Collection／Bean Detail 和搬移前一致。
+
+### 步驟 E：停下來
+- [ ] 在 codex-to-claude.md 寫「REQ-37b 待審，SQL 未套用雲端」，附 migration 檔名與 advisors 結果。**到這裡停**，等 Claude 審 SQL、yiyi 同意後，再另外給你套用雲端的指令（套用後要核對雲端 migration 版本與 repo 一致，同 REQ-4 那次）。
+
+### 每步共通
+lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b 更新，handoff 寫在 docs/project/batch-4-*.md。不 merge main、不部署、不碰雲端資料庫。
