@@ -186,12 +186,12 @@ A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 
 
 ### 步驟 A：「這一杯」一頁兩狀態
 
-- [ ] 現在「剛沖完」（/brew/[id]/complete、brew-result-summary）和「已評分」（/journal/[id]、brew-detail）是兩套頁面。合成同一個元件，依「有沒有評分」切換：頁首、豆子列、按鈕不同；參數格與每一段共用（已有 BrewParameterGrid／BrewSteps）。
-- [ ] 剛沖完：頁首 BREW COMPLETE · 剛沖完；豆子列顯示 accent「還沒評分」；總時間下寫「配方 m:ss」；每一段顯示實際開始時間與「晚／早 N 秒」（accent，有 ↑↓ 或文字，不只靠顏色）；按鈕「先存起來｜幫這杯評分」。
-- [ ] 已評分：頁首「#編號 · 日期時間」、右上「編輯」；豆子列顯示星等；按鈕「✦ AI 分析｜再沖一次」。
-- [ ] 照片、「看沖煮影片」、↑↓（跟同豆子上一杯比）：照片／影片沒有資料來源，**不放**。↑↓ 等步驟 B 有星等後，同一包豆子有上一杯星等才顯示。
-- [ ] 萃取率：「有 TDS 計的話　輸入 TDS ›」先只放入口文字，沒有 TDS 欄位就不做輸入（不捏造萃取率）。若你判斷加 TDS 欄位很小，可做成選填數字並列入 preflight／REQ-37b 清單。
-- [ ] 舊路由保留並導向新元件；justCompleted 流程的導覽隱藏規則與測試不變。
+- [x] 現在「剛沖完」（/brew/[id]/complete、brew-result-summary）和「已評分」（/journal/[id]、brew-detail）是兩套頁面。合成同一個元件，依「有沒有評分」切換：頁首、豆子列、按鈕不同；參數格與每一段共用（已有 BrewParameterGrid／BrewSteps）。（5c80d56）
+- [x] 剛沖完：頁首 BREW COMPLETE · 剛沖完；豆子列顯示 accent「還沒評分」；總時間下寫「配方 m:ss」；每一段顯示實際開始時間與「晚／早 N 秒」（accent，有 ↑↓ 或文字，不只靠顏色）；按鈕「先存起來｜幫這杯評分」。（5c80d56）
+- [x] 已評分：頁首「#編號 · 日期時間」、右上「編輯」；豆子列顯示星等；按鈕「✦ AI 分析｜再沖一次」。（5c80d56；星等6747350）
+- [x] 照片、「看沖煮影片」、↑↓（跟同豆子上一杯比）：照片／影片沒有資料來源，**不放**。↑↓ 等步驟 B 有星等後，同一包豆子有上一杯星等才顯示。（4c7e2cd）
+- [x] 萃取率：「有 TDS 計的話　輸入 TDS ›」先只放入口文字，沒有 TDS 欄位就不做輸入（不捏造萃取率）。若你判斷加 TDS 欄位很小，可做成選填數字並列入 preflight／REQ-37b 清單。（5c80d56）
+- [x] 舊路由保留並導向新元件；justCompleted 流程的導覽隱藏規則與測試不變。（5c80d56）
 
 ### 步驟 B：Flavor Feedback（06）＋5 星
 
@@ -204,9 +204,9 @@ A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 
 
 ### 步驟 C：把星等接到已經做好的地方
 
-- [ ] Collection 豆子卡：「沖過 N 次 · 最佳 N/5」，只算有 stars 的杯；沒有就只寫「沖過 N 次」。
-- [ ] Bean Detail：「沖過 N 次　最好的一杯 ★★★★★」＋右側「全部紀錄」；Journal 列與 Bean Detail 最近幾杯的星等＋↑↓（同豆子、上一杯也有 stars 才顯示，↑ 用 --green、↓ 用 --accent，要有 aria-label）。
-- [ ] 390×844 截圖：剛沖完、評分頁、已評分、Collection、Bean Detail、Journal。
+- [x] Collection 豆子卡：「沖過 N 次 · 最佳 N/5」，只算有 stars 的杯；沒有就只寫「沖過 N 次」。（4c7e2cd）
+- [x] Bean Detail：「沖過 N 次　最好的一杯 ★★★★★」＋右側「全部紀錄」；Journal 列與 Bean Detail 最近幾杯的星等＋↑↓（同豆子、上一杯也有 stars 才顯示，↑ 用 --green、↓ 用 --accent，要有 aria-label）。（4c7e2cd）
+- [x] 390×844 截圖：剛沖完、評分頁、已評分、Collection、Bean Detail、Journal。（4c7e2cd）
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新，handoff 寫在 docs/project/batch-3-*.md。全部做完在 codex-to-claude.md 寫「批次 3 完成」。不 merge main、不部署、不改 SQL／雲端。
