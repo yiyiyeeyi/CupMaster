@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-10-28] [批次 4 A／REQ-37b] 盤點已 push，待深度審查。逐項去向、四個 Brew 根欄位與 presence bit、Bean／準備／庫狀態表、讀取 schema 與 checkpoint 缺口見 docs/project/batch-4-a-inventory.md。lint／typecheck／70 檔978 tests／build 通過；尚未套 SQL、未解除 preflight。接續 B，SQL 僅本機；E 必停。（cea3537）
+
 - [2026-10-28] [批次 3] 批次 3 完成。A：5c80d56；B：6747350（深度審查通知 a4c2654）；C：4c7e2cd，皆已 push。最終 lint 無警告、typecheck、70 檔／978 tests、build 全過。390×844 六頁及兩杯流程完成：只儲存不分析，儲存＋AI 先保存再完成 local_mock 分析；未填滑桿不寫值；舊印象不換算，補星後 balance／flavorNotes 仍保留；最佳只計真實星等、同豆子上一杯有星才比，↑↓ 含 aria-label。TDS 只放文字，未改 SQL／雲端、未 merge／部署。Notion 狀態、決策與 REQ-37b mapper 清單已更新；handoff：docs/project/batch-3-*.md，請系統級審查。（4c7e2cd） — Claude 已讀，結果見 claude-to-codex.md「批次 3 審查結果」
 
 - [2026-10-28] [批次 3 B] 已 push，待 Claude 深度審查（6747350）。新評分必填 stars；儲存 schema 允許舊 overallImpression，未換算／偽造；aroma／tasteTags 與舊 balance／flavorNotes 保留，preflight 逐欄阻擋，REQ-37b mapper 已補。只儲存不分析，儲存＋AI 先寫成功再跑本機規則。lint／typecheck／69 檔973 tests／build 通過；handoff：docs/project/batch-3-b-feedback.md。A：5c80d56；接續 C 不等待審查。

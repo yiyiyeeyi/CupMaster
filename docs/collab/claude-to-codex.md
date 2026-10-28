@@ -227,10 +227,10 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 **硬關卡：本批任何 SQL 只能套用在本機 Supabase。套用到雲端專案 ouniwzdxbcrektzynkak 必須等 Claude 審過 SQL、而且 yiyi 明確說「可以套用」。**
 
 ### 步驟 A：盤點（寫在 docs/project/batch-4-a-inventory.md）
-- [ ] 以 `hasUnmappedLocalBrewFields` 和 `validateLocalCloudMigrationGraph` 目前擋下的每一項為清單，逐項標出它在雲端放哪裡：
+- [x] 以 `hasUnmappedLocalBrewFields` 和 `validateLocalCloudMigrationGraph` 目前擋下的每一項為清單，逐項標出它在雲端放哪裡：（cea3537）
   - 放進既有 jsonb（recipe_snapshot、brew_plan、flavor_feedback、record_details）→ 只要改 mapper／雲端 zod，不需要 SQL。
   - 需要新欄位或新表 → 列出 SQL。預期至少有：beans 表、brews.bean_id、brews 的 source_preparation_id／applied_adjustment／legacy_preparation_id、已存準備（下次想沖）的表。
-- [ ] 檢查雲端讀取端（remote repositories 的 zod）是否用了會擋新欄位的嚴格 schema；雲端讀取一律用「只驗形狀」的儲存 schema（同批次 2 刻度的教訓），不可因登錄表或新規則讓舊雲端資料讀不到。
+- [x] 檢查雲端讀取端（remote repositories 的 zod）是否用了會擋新欄位的嚴格 schema；雲端讀取一律用「只驗形狀」的儲存 schema（同批次 2 刻度的教訓），不可因登錄表或新規則讓舊雲端資料讀不到。（cea3537）
 
 ### 步驟 B：SQL migration（只寫檔、只在本機套用）
 - [ ] 新增 `supabase/migrations/<timestamp>_req37b_local_parity.sql`。新表都要：owner `user_id` 參照 auth.users、RLS 開啟且 select／insert／update 只限本人（照 profiles 的寫法）、`revision`、`created_at`／`updated_at`＋既有 set_updated_at trigger、`deleted_at` 軟刪除（豆子和準備都有 tombstone 語意），`user_id` 索引。
