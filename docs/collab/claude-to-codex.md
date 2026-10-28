@@ -30,6 +30,7 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 ## Claude 認領中
 
 - `design/new/`（Claude 維護；Codex 只讀）
+- `src/components/pour-path*.tsx`／`pour-path*.css`（注水軌跡動畫元件，Claude 做；2026-10-28 起）
 - globals.css／bottom-navigation.tsx／layout.tsx 已於 2026-10-27 釋出，之後由你自由修改。
 
 ## 本批範圍（批次 1）
@@ -294,3 +295,20 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b
 
 ### D 的 E2E
 Docker daemon pipe 不可用 = Docker Desktop 沒在跑（不是程式問題）。等 yiyi 手動打開 Docker Desktop 後跑 opt-in E2E；在那之前先修上面三點，D 的程式碼可以先 commit（E2E 那格不勾）。E 仍是停止關卡。
+
+## REQ-37b 步驟 E：套用雲端（yiyi 2026-10-28 同意，Claude 審查通過）
+
+SQL 自 5c03635 起未變更；雲端 ouniwzdxbcrektzynkak 目前只有 20260804061934、20261024110000 兩個 migration，三張表 0 筆。
+- [x] 只套用 REQ-37b migration。以本機 migration 清單（共 3 筆）對照雲端清單（原有 2 筆），確認唯一待套用項為 REQ-37b；CLI `--dry-run` 因本執行環境沒有 CLI access token 而無法執行，改由已連線 Supabase migration 工具套用 SQL 原文。遠端產生版本 `20261028124212` 後，repo migration 檔改名至同版本，SQL 內容未改；目前 repo 與遠端 migration 版本／名稱完全一致。未用 Dashboard SQL Editor。（f14efbe）
+- [x] 不跑 seed、不 reset、不寫任何使用者資料；套用後 public 表 row counts 均為 0。（f14efbe）
+- [x] 在 codex-to-claude.md 回報前後 migration 清單與套用結果。Claude 請自行核對雲端 advisors；Codex 套用後檢查結果：Security 有 leaked password protection disabled WARN；Performance 有 3 項未索引 FK 與 19 項 unused index INFO。未比較套用前的 advisor 狀態。（f14efbe）
+- [x] 不 merge main、不部署。（f14efbe）
+
+## 下一項（REQ-37b 套用雲端之後做）：真實注水軌跡（yiyi 2026-10-28）
+
+yiyi 要讓沖煮畫面播放真人倒水的實際軌跡，不用示意路線；標註由 Codex 負責。視覺樣稿（Claude）：https://claude.ai/artifact/FM3ztXGdnLon46a2XKnPCG 。手動標註／檢查工具：https://claude.ai/artifact/9NvTn7vF9kEbjpdJUuKFKt ，兩者的 JSON 格式相同。
+
+- [ ] **資料格式**：RecipeStep 新增選填 `pourPath: { version: 1, points: {t, x, y}[] }`。t 是這一段開始後的秒數；x、y 以濾紙半徑為 1、中心為 0（右、下為正）；放開水柱的空檔就不放點。只放 zod 形狀驗證；沒有 pourPath 時沿用 pourMethod 的示意路線。preflight 先 fail-closed 擋這個欄位，跟其他新欄位一樣，mapper 與 round-trip 測試補上後再解除（存在 recipe_snapshot／brew_plan jsonb 裡，不用改 SQL）。
+- [ ] **標註**：yiyi 提供俯拍影片（手機在濾杯正上方）。寫一支本機腳本（例如 Python + OpenCV，放 `tools/pour-trace/`，不進 app bundle）：手動或半自動定濾杯圓心和半徑，追蹤水柱落點，平滑後每 0.1 秒取一點，依段落切開輸出 JSON。自動追蹤不準的地方用上面的工具人工修。影片和原始幀不進 git，只提交輸出的 JSON 和腳本。
+- [ ] 每支影片的來源與授權寫在 JSON 旁的 README（別人的影片要有對方同意）。
+- [ ] **播放**：Live Brew 依照目前這一段的 pourPath 播放，畫法照視覺樣稿：虛線全路線、暖色點加拖尾、濾紙邊細線、`prefers-reduced-motion` 時改成靜態。播放速度對齊實際計時器，不是影片時間。這部分的視覺元件由 Claude 認領（`src/components/pour-path*.tsx`），Codex 負責資料與接線；元件做好前先用 props 介面 `{method, pourPath?, elapsedSeconds}` 接。
