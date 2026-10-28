@@ -195,12 +195,12 @@ A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 
 
 ### 步驟 B：Flavor Feedback（06）＋5 星
 
-- [ ] 新增選填 `FlavorFeedback.stars`（1–5 整數）。新送出的評分**必須有星等**。舊紀錄只有 overallImpression（liked／neutral／disliked）：**不換算成星**，畫面上星等位置改顯示原本的喜歡／普通／不喜歡文字。
-- [ ] 版面：5 顆大星；「喝起來」可複選文字標籤（甜、酸、苦、乾淨、厚實、偏淡、香氣好、澀、平衡），選中加底線變粗、不用膠囊；「細一點」7 條細線滑桿（酸度、甜度、苦味、香氣、乾淨度、口感、餘韻，1–5，可不填）；筆記。
-- [ ] 資料對應：滑桿用既有 acidity／sweetness／bitterness／body（口感）／clarity（乾淨度）／aftertaste，新增選填 `aroma`；既有 `balance` 保留在資料裡、舊紀錄照常顯示，新表單不再出現。文字標籤和既有 FlavorNote enum 語意不同，新增選填 `tasteTags`（上面九個值的 enum），舊 flavorNotes 保留不轉換。
-- [ ] overallImpression 目前必填：新表單不再問，存檔時不要偽造值。把它改成選填（舊資料仍讀得到），所有讀它的地方（分析規則、Journal、搬移 preflight）改成「有 stars 用 stars，沒有才看 overallImpression」。
-- [ ] 按鈕「儲存｜儲存＋✦ AI 分析」：一定能只儲存。「儲存＋AI 分析」接現有的規則分析頁，按鈕文字保留 ✦。
-- [ ] 新欄位 stars、aroma、tasteTags（以及 TDS 若有做）加進 cloud-migration preflight 擋下清單與 Notion REQ-37b mapper 清單。
+- [x] 新增選填 `FlavorFeedback.stars`（1–5 整數）。新送出的評分**必須有星等**。舊紀錄只有 overallImpression（liked／neutral／disliked）：**不換算成星**，畫面上星等位置改顯示原本的喜歡／普通／不喜歡文字。（6747350）
+- [x] 版面：5 顆大星；「喝起來」可複選文字標籤（甜、酸、苦、乾淨、厚實、偏淡、香氣好、澀、平衡），選中加底線變粗、不用膠囊；「細一點」7 條細線滑桿（酸度、甜度、苦味、香氣、乾淨度、口感、餘韻，1–5，可不填）；筆記。（6747350）
+- [x] 資料對應：滑桿用既有 acidity／sweetness／bitterness／body（口感）／clarity（乾淨度）／aftertaste，新增選填 `aroma`；既有 `balance` 保留在資料裡、舊紀錄照常顯示，新表單不再出現。文字標籤和既有 FlavorNote enum 語意不同，新增選填 `tasteTags`（上面九個值的 enum），舊 flavorNotes 保留不轉換。（6747350）
+- [x] overallImpression 目前必填：新表單不再問，存檔時不要偽造值。把它改成選填（舊資料仍讀得到），所有讀它的地方（分析規則、Journal、搬移 preflight）改成「有 stars 用 stars，沒有才看 overallImpression」。（6747350）
+- [x] 按鈕「儲存｜儲存＋✦ AI 分析」：一定能只儲存。「儲存＋AI 分析」接現有的規則分析頁，按鈕文字保留 ✦。（6747350）
+- [x] 新欄位 stars、aroma、tasteTags（以及 TDS 若有做）加進 cloud-migration preflight 擋下清單與 Notion REQ-37b mapper 清單。（6747350）
 
 ### 步驟 C：把星等接到已經做好的地方
 
