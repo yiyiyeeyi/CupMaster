@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { BrewRecipeSnapshot } from "./types";
 export interface GrinderPart { label:string; min:number; max?:number; }
 export interface GrinderDefinition { id:string; name:string; format:"single"|"compound"|"number"; unit:string; parts:GrinderPart[]; source:string; }
+// Published formats/ranges may only be widened; tightening or changing formats requires a data migration.
 export const grinders:readonly GrinderDefinition[]=[
   {id:"timemore-c3",name:"Timemore C3",format:"single",unit:"格",parts:[{label:"格",min:0}],source:"https://www.timemore.com/pages/download-center"},
   {id:"comandante-c40",name:"Comandante C40",format:"single",unit:"clicks",parts:[{label:"clicks",min:0}],source:"https://www.comandantegrinder.com/downloads/C40-Manual-E-Q3-21-web.pdf"},
@@ -15,12 +16,14 @@ export function grinderDefinition(value:string,name?:string):GrinderDefinition{
   return grinders.find(g=>g.id===value || g.name.toLocaleLowerCase()===value.trim().toLocaleLowerCase()) ??
     {id:value.startsWith("custom:")?value:`custom:${encodeURIComponent(value)}`,name:name??value,format:"number",unit:"",parts:[],source:""};
 }
-const rawSetting=z.discriminatedUnion("format",[
+/** Persistence validates the stored shape, independently of the current model registry. */
+export const storedGrindSettingSchema=z.discriminatedUnion("format",[
   z.object({grinderId:z.string().min(1),format:z.literal("single"),value:z.number().finite().int().nonnegative()}),
   z.object({grinderId:z.string().min(1),format:z.literal("compound"),parts:z.array(z.number().finite().int().nonnegative()).min(2).max(3)}),
   z.object({grinderId:z.string().min(1),format:z.literal("number"),value:z.number().finite().nonnegative()}),
 ]);
-export const grindSettingSchema=rawSetting.superRefine((setting,context)=>{
+/** Current input rules only; never use this schema to read historical records. */
+export const grindSettingSchema=storedGrindSettingSchema.superRefine((setting,context)=>{
   const definition=grinderDefinition(setting.grinderId);
   if(definition.format!==setting.format){context.addIssue({code:"custom",message:"刻度格式與磨豆機不同。"});return;}
   const values=setting.format==="compound"?setting.parts:setting.format==="single"?[setting.value]:[];
@@ -29,7 +32,7 @@ export const grindSettingSchema=rawSetting.superRefine((setting,context)=>{
   if(setting.grinderId==="fellow-ode-gen-2" && setting.format==="compound" && setting.parts[0]===11 && setting.parts[1]!==0)
     context.addIssue({code:"custom",message:"11 是 Ode 的最後一個刻度。"});
 });
-export type GrindSetting=z.infer<typeof grindSettingSchema>;
+export type GrindSetting=z.infer<typeof storedGrindSettingSchema>;
 export function switchGrinderSetting(current:GrindSetting|undefined,grinderId:string):GrindSetting|undefined{
   if(!current)return undefined;
   const parsed=grindSettingSchema.safeParse({...current,grinderId});
@@ -38,7 +41,7 @@ export function switchGrinderSetting(current:GrindSetting|undefined,grinderId:st
 export function formatGrindSetting(setting:GrindSetting,withUnit=true){
   const definition=grinderDefinition(setting.grinderId);
   const value=setting.format==="compound"?setting.parts.join("."):String(setting.value);
-  return withUnit && definition.unit?`${value} ${definition.unit}`:value;
+  return withUnit && definition.format===setting.format && definition.unit?`${value} ${definition.unit}`:value;
 }
 export function compareGrindSettings(a:GrindSetting,b:GrindSetting):number|null{
   if(a.grinderId!==b.grinderId || a.format!==b.format)return null;
@@ -49,7 +52,9 @@ export function compareGrindSettings(a:GrindSetting,b:GrindSetting):number|null{
 /** Old strings stay untouched; only explicit structured settings drive derived projections. */
 export function deriveGrind(snapshot:BrewRecipeSnapshot):BrewRecipeSnapshot{
   if(!snapshot.grind)return snapshot;
-  const setting=grindSettingSchema.parse(snapshot.grind),definition=grinderDefinition(setting.grinderId,snapshot.equipment?.grinder);
+  const parsed=storedGrindSettingSchema.safeParse(snapshot.grind);
+  if(!parsed.success)return snapshot;
+  const setting=parsed.data,definition=grinderDefinition(setting.grinderId,snapshot.equipment?.grinder);
   const value=formatGrindSetting(setting);
   return {...snapshot,equipment:{...snapshot.equipment,dripper:snapshot.dripper.value,grinderId:setting.grinderId,grinder:definition.name,grinderSetting:formatGrindSetting(setting,false)},
     grindDescription:{value,recipeDefault:snapshot.grindDescription?.recipeDefault??"",source:"user_override"}};

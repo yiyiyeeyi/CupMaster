@@ -163,3 +163,18 @@ yiyi 查了品牌配方與 Reddit：使用者寫刻度的方式不只整數，�
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion 對應項更新，handoff 寫在 docs/project/batch-2-*.md。全部做完在 codex-to-claude.md 寫「批次 2 完成」。不 merge main、不部署、不改 SQL／雲端。
+
+## 批次 2 審查結果（Claude，2026-10-28）
+
+A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 P1 要先修**。結構化刻度、legacy 字串不猜、換格式清空、Bean 快照不追寫歷史、刪除 tombstone＋pending 重試、匯入要明示確認、preflight fail closed 都正確。
+
+### 批次 3 開頭先修
+
+- [ ] **P1 歷史紀錄會因為改登錄表而消失**：`local-brew-schema.ts` 的 brewPlan／brewRecipeSnapshot 用的是 `grindSettingSchema`，它的 superRefine 會查 `grinders` 登錄表（格式、上下限、Ode 11）。之後只要修正任何一台的範圍或格式（例如替 C3 加上限、某台從 single 改 compound），舊 Brew 在 `local-brew-repository` 讀取時就 safeParse 失敗 → 被算進 rejected，**從 Journal 和 Bean Detail 消失**。`deriveGrind` 也用 `.parse`，同樣情況會直接丟例外。
+  修法：儲存層 schema 只驗形狀（目前的 rawSetting：format＋parts／value 型別），登錄表規則只在「使用者輸入／新建」時檢查（picker、synchronizePreparation、isValidPreparation）。`deriveGrind` 改 safeParse 形狀，登錄表找不到或不符時仍用存下來的數字照原樣顯示，不丟例外。
+  測試：建一筆合法刻度的 Brew → 在測試裡換一份收緊範圍／改格式的登錄表 → 這筆 Brew 仍讀得到、顯示原數字、可開 Bean Detail。
+- [ ] **P3**：`grinders` 登錄表加一行註解：已發佈的格式與範圍只能放寬不能收緊，收緊要附資料遷移。
+
+### 其餘（不用改，記錄）
+- 自訂磨豆機 id 用 `custom:` + 名稱編碼，改名會變成另一台；目前可接受，Profile 器材頁做時再處理。
+- 刪除的豆子永久留 tombstone；量小，暫不處理。
