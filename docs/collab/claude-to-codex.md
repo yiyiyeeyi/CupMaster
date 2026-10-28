@@ -245,8 +245,8 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新�
 - [x] profiles.preferences 新建時帶入 displayNameConfirmed／experienceLevelSource，更新時合併保留其他 keys。（1a5bc62）
 
 ### 步驟 D：解除 preflight
-- [ ] 只解除「已有 round-trip 測試覆蓋」的欄位；沒覆蓋到的繼續 fail closed。每解除一項，對應測試要從「被擋」改成「搬得上去且 round-trip 相等」。
-- [ ] 搬移順序：beans → preparations → brews（bean_id 才有對象）→ suggested_plans；中斷後用既有 checkpoint 冪等續跑，不重複建立。
+- [x] 只解除「已有 round-trip 測試覆蓋」的欄位；沒覆蓋到的繼續 fail closed。每解除一項，對應測試要從「被擋」改成「搬得上去且 round-trip 相等」。（1412575）
+- [x] 搬移順序：beans → preparations → brews（bean_id 才有對象）→ suggested_plans；中斷後用既有 checkpoint 冪等續跑，不重複建立。（1412575）
 - [ ] 用本機 Supabase 跑一次完整搬移：模擬一位新版使用者（有豆子、三種刻度、星等、冰沖、已存準備），搬完在雲端讀回來，畫面上 Journal／Collection／Bean Detail 和搬移前一致。
 
 ### 步驟 E：停下來
@@ -282,3 +282,15 @@ lint、typecheck、全部測試、build 全過即 commit＋push，Notion REQ-37b
 
 ### 之後
 本機起來 → 回到 B（reset、重跑兩次、SQL 測試、advisors、gen types）→ D → E 停。E 的規則不變。
+
+## REQ-37b B／C 深度審查結果（Claude 2026-10-28，看過 5c03635、1a5bc62、525d34b）
+
+**B 通過。** SQL 三點修正都已落實（備份不上雲、bean tombstone 保留 payload 已註明、deferrable 註解），本機 reset、重跑、RLS 負向測試、advisors 都過。
+**C 通過，有一個 P2 要在 D 裡一起修：**
+
+- [x] **P2 library_states 多裝置合併**：deletedIds 聯集、redirects／lineage 依 key 合併、legacyImportReviewed OR；同 key 衝突保留雲端值並將 warning 寫入 checkpoint；revision conflict 重讀合併一次。已有兩裝置與競態重試測試。（1412575）
+- [x] **P3 tombstone**：雲端 Bean／preparation 已刪除、本機同 ID 仍 active 時回 invalid_data，鎖定不復活行為。（1412575）
+- [x] **P3 generated types 註解**：更新 `brewParityColumnsSchema` 註解，說明 runtime validation 與本機生成的 `Database` 型別。（1412575）
+
+### D 的 E2E
+Docker daemon pipe 不可用 = Docker Desktop 沒在跑（不是程式問題）。等 yiyi 手動打開 Docker Desktop 後跑 opt-in E2E；在那之前先修上面三點，D 的程式碼可以先 commit（E2E 那格不勾）。E 仍是停止關卡。
