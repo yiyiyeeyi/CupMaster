@@ -141,11 +141,11 @@ yiyi 查了品牌配方與 Reddit：使用者寫刻度的方式不只整數，�
 ### 步驟 B：豆子資料（新增本機實體）
 
 目前豆子只是每杯 `recordDetails.bean` 的文字欄位，沒有「一包豆子」的實體。
-- [x] 新增本機 Bean 庫（獨立 localStorage key＋zod envelope，照現有 repository 寫法）。欄位照 ui-ux-spec §11：烘焙商、產區、處理法、烘焙度、莊園、品種、烘焙日、產季、海拔、色值（Agtron）、拼配、風味，全部選填。**不追蹤剩下幾克。**（10e575b；Collection 問詢 UI 由 C 接上）
-- [x] Brew 加選填 `beanId`。舊紀錄不改寫；第一次進 Collection 時，依過去紀錄的豆名＋烘焙商找出不同的豆子，**詢問使用者**後建立（可全選或略過），不要靜默大量建立。（10e575b；Collection 問詢 UI 由 C 接上）
-- [x] Quick Prepare 的豆子欄改成從豆子庫挑選或新增，選了就寫 beanId，並把顯示用欄位複製進這杯的 snapshot（舊豆子被編輯不會改寫歷史杯）。（10e575b；Collection 問詢 UI 由 C 接上）
-- [x] 刪除豆子：歷史杯保留自己的快照，只解除連結。（10e575b；Collection 問詢 UI 由 C 接上）
-- [x] 新欄位（Bean 庫、beanId、刻度結構）一律補進 P1 的 cloud-migration preflight 擋下清單和 REQ-37b mapper 清單。（10e575b；Collection 問詢 UI 由 C 接上）
+- [x] 新增本機 Bean 庫（獨立 localStorage key＋zod envelope，照現有 repository 寫法）。欄位照 ui-ux-spec §11：烘焙商、產區、處理法、烘焙度、莊園、品種、烘焙日、產季、海拔、色值（Agtron）、拼配、風味，全部選填。**不追蹤剩下幾克。**（10e575b；Collection 問詢 UI：b5f9eee）
+- [x] Brew 加選填 `beanId`。舊紀錄不改寫；第一次進 Collection 時，依過去紀錄的豆名＋烘焙商找出不同的豆子，**詢問使用者**後建立（可全選或略過），不要靜默大量建立。（10e575b；Collection 問詢 UI：b5f9eee）
+- [x] Quick Prepare 的豆子欄改成從豆子庫挑選或新增，選了就寫 beanId，並把顯示用欄位複製進這杯的 snapshot（舊豆子被編輯不會改寫歷史杯）。（10e575b；Collection 問詢 UI：b5f9eee）
+- [x] 刪除豆子：歷史杯保留自己的快照，只解除連結。（10e575b；Collection 問詢 UI：b5f9eee）
+- [x] 新欄位（Bean 庫、beanId、刻度結構）一律補進 P1 的 cloud-migration preflight 擋下清單和 REQ-37b mapper 清單。（10e575b；Collection 問詢 UI：b5f9eee）
 
 ### 步驟 C：Collection（10-collection.png）
 
@@ -156,10 +156,10 @@ yiyi 查了品牌配方與 Reddit：使用者寫刻度的方式不只整數，�
 
 ### 步驟 D：Bean Detail（11、11b）
 
-- [ ] 主視覺、BEAN PROFILE 兩行＋「更多 ▾」、深色分隔線下「我的紀錄」（沖過 N 次、最近幾杯，沿用 Journal 列）。不知道的欄位不顯示。
-- [ ] 「最好的一杯 ★」「適合這包的配方」「AI 建議」：沒有星等與 AI，**這次不放**。
-- [ ] 按鈕：編輯豆子｜用這包沖（帶 beanId 進 Quick Prepare）。
-- [ ] 390×844 截圖自查；Collection／Bean Detail 視覺不確定時寫到 codex-to-claude.md 問 Claude。
+- [x] 主視覺、BEAN PROFILE 兩行＋「更多 ▾」、深色分隔線下「我的紀錄」（沖過 N 次、最近幾杯，沿用 Journal 列）。不知道的欄位不顯示。（2eb734b）
+- [x] 「最好的一杯 ★」「適合這包的配方」「AI 建議」：沒有星等與 AI，**這次不放**。（2eb734b）
+- [x] 按鈕：編輯豆子｜用這包沖（帶 beanId 進 Quick Prepare）。（2eb734b）
+- [x] 390×844 截圖自查；Collection／Bean Detail 視覺不確定時寫到 codex-to-claude.md 問 Claude。（2eb734b）
 
 ### 每步共通
 lint、typecheck、全部測試、build 全過即 commit＋push，Notion 對應項更新，handoff 寫在 docs/project/batch-2-*.md。全部做完在 codex-to-claude.md 寫「批次 2 完成」。不 merge main、不部署、不改 SQL／雲端。
