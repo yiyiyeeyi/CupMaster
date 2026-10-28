@@ -7,6 +7,7 @@ export { getActiveNavigationHref } from "@/domain/start-navigation";
 
 const icons = {
   discover: <><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></>,
+  collection: <><path d="M6 4h12l1 16H5z"/><path d="M8 9h8M9 13h6"/></>,
   brew: <><path d="M5 6h14l-5 7h-4z" /><path d="M9 16h6l-1 4h-4z" /></>,
   journal: <><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h6M9 16h3" /></>,
   me: <><circle cx="12" cy="9" r="3.5" /><path d="M5 20c1.5-4 12.5-4 14 0" /></>,
@@ -20,6 +21,7 @@ export function BottomNavigation() {
   const active = getActiveNavigationHref(pathname), returnTo = safePrepareReturnTo(`${pathname}${params.size ? `?${params}` : ""}`);
   const items = [
     { href: "/discover", label: "Discover", icon: "discover" },
+    { href: "/collection", label: "Collection", icon: "collection" },
     { href: `/brew/prepare?entry=quick&returnTo=${encodeURIComponent(returnTo)}`, label: "Brew", icon: "brew", brew: true },
     { href: "/journal", label: "Journal", icon: "journal" },
     { href: "/me", label: "Me", icon: "me" },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getActiveNavigationHref, isBottomNavigationVisible, legacyStartRedirect, safePrepareReturnTo } from "@/domain/start-navigation";
 import { prepareEntryQuerySchema } from "@/domain/prepare-entry-query";
 describe("Bottom Navigation route policy", () => {
-  it.each([["/discover", "/discover"], ["/recipes/r1", "/discover"], ["/journal", "/journal"], ["/journal/b1/feedback", "/journal"], ["/plans/p1", "/journal"], ["/me", "/me"], ["/brew/prepare", null]])("maps %s to %s", (path, expected) => expect(getActiveNavigationHref(path)).toBe(expected));
+  it.each([["/collection","/collection"],["/beans/one/edit","/collection"],["/discover", "/discover"], ["/recipes/r1", "/discover"], ["/journal", "/journal"], ["/journal/b1/feedback", "/journal"], ["/plans/p1", "/journal"], ["/me", "/me"], ["/brew/prepare", null]])("maps %s to %s", (path, expected) => expect(getActiveNavigationHref(path)).toBe(expected));
   it.each(["/", "/brew", "/brew/b1", "/brew/b1/prepare", "/brew/b1/complete", "/brew/prepare", "/recipes/r1/prepare", "/auth", "/onboarding", "/dev/demo"])("hides navigation at %s", path => expect(isBottomNavigationVisible(path)).toBe(false));
   it("hides the just-completed flow while retaining normal historical Brew Detail navigation", () => {
     expect(isBottomNavigationVisible("/journal/b1", "justCompleted=1&from=brew")).toBe(false);
@@ -10,6 +10,7 @@ describe("Bottom Navigation route policy", () => {
     expect(isBottomNavigationVisible("/journal")).toBe(true);
     expect(isBottomNavigationVisible("/me")).toBe(true);
   });
+  it("preserves safe Collection and Bean return routes",()=>{expect(safePrepareReturnTo("/collection")).toBe("/collection");expect(safePrepareReturnTo("/beans/id")).toBe("/beans/id");expect(isBottomNavigationVisible("/collection")).toBe(true);});
   it("retains old query keys and repeated values, sanitizing only unsafe returnTo", () => {
     const url = new URL(legacyStartRedirect("/brew/prepare", { campaign: ["a", "b"], returnTo: "https://evil.test", filter: "completed" }), "https://cupmaster.local");
     expect(url.searchParams.getAll("campaign")).toEqual(["a", "b"]);

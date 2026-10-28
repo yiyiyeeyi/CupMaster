@@ -2,7 +2,7 @@
 
 > 這份文件是 repo 內的**產品決策依據**。所有開發者（人或 AI：Codex、Claude）開工前都要讀。
 > 完整 PRD、需求清單與狀態在 Notion；本檔是其中「已定案、會影響實作」的摘要，離線也能查。
-> 最後更新：2026-10-26
+> 最後更新：2026-10-28
 
 ## 1. 依據的優先順序
 
@@ -92,6 +92,7 @@ V1 成功標準：
 
 | 日期 | 決策 | 要點 |
 |---|---|---|
+| 2026-10-27 | 批次 2 本機 Collection／Bean Detail 與刻度格式 | 使用者定案：刻度依型號 single／compound／number；新增全選填 Bean 庫與每杯快照；舊豆子匯入需確認。Collection 只做豆子／方案，實頁完成後加入第五格導覽。Bean Detail 不放無來源星等／AI；不改 SQL／雲端，不強迫選 Bean |
 | 2026-10-26 | REQ-39 首次使用與＋種子 | 根路由直接 Discover；＋只取非 legacy 的 completed／abandoned Brew，createdAt 由新到舊、同時以 id 決勝；只有 not_started 草稿時用 gentle-start。舊路由保留 query，returnTo 需安全檢查；沖煮與完成流程隱藏導覽 |
 | 2026-10-26 | REQ-39 可換配方與偏好界線 | 換配方清除 appliedAdjustment、sourceBrewId、sourcePreparationId 並提示，不消耗原準備；同杯 reset 不換 Snapshot。新偏好優先，需求只用 PRD 選項，舊 UserProfile 唯讀；暱稱與 bootstrap 拆 REQ-39b，本輪不做 |
 | 2026-10-25 | REQ-38 下次想沖於沖完且保存成功後消耗 | 新 Brew 記錄 sourcePreparationId；executionStatus=completed 且 recordStatus=saved 並寫入成功後才移除準備。中途／逾時作廢與返回清除均保留；移除失敗不影響 Brew 保存，Journal 下次載入冪等補做。同一準備多杯並行時第一杯完成即移除，後續完成視為已移除；再次沖同杯從 Brew Detail「再沖一杯」進入 |
