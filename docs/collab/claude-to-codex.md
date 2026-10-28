@@ -178,3 +178,35 @@ A（磨豆機刻度）、B（豆子庫）深度審查：**通過，但有一個 
 ### 其餘（不用改，記錄）
 - 自訂磨豆機 id 用 `custom:` + 名稱編碼，改名會變成另一台；目前可接受，Profile 器材頁做時再處理。
 - 刪除的豆子永久留 tombstone；量小，暫不處理。
+
+## 批次 3（yiyi 2026-10-28 選 A：「這一杯」合併＋評分 5 星＋只儲存）
+
+先讀 design/new：`05-brew-summary.png`、`08-journal-detail.png`、`06-flavor-feedback.png`，ui-ux-spec §05／08、§06。
+步驟 B 動到資料 schema（新評分欄位），**完成 push 後在 codex-to-claude.md 寫一行，Claude 立即深度審查**，你繼續做下一步。
+
+### 步驟 A：「這一杯」一頁兩狀態
+
+- [ ] 現在「剛沖完」（/brew/[id]/complete、brew-result-summary）和「已評分」（/journal/[id]、brew-detail）是兩套頁面。合成同一個元件，依「有沒有評分」切換：頁首、豆子列、按鈕不同；參數格與每一段共用（已有 BrewParameterGrid／BrewSteps）。
+- [ ] 剛沖完：頁首 BREW COMPLETE · 剛沖完；豆子列顯示 accent「還沒評分」；總時間下寫「配方 m:ss」；每一段顯示實際開始時間與「晚／早 N 秒」（accent，有 ↑↓ 或文字，不只靠顏色）；按鈕「先存起來｜幫這杯評分」。
+- [ ] 已評分：頁首「#編號 · 日期時間」、右上「編輯」；豆子列顯示星等；按鈕「✦ AI 分析｜再沖一次」。
+- [ ] 照片、「看沖煮影片」、↑↓（跟同豆子上一杯比）：照片／影片沒有資料來源，**不放**。↑↓ 等步驟 B 有星等後，同一包豆子有上一杯星等才顯示。
+- [ ] 萃取率：「有 TDS 計的話　輸入 TDS ›」先只放入口文字，沒有 TDS 欄位就不做輸入（不捏造萃取率）。若你判斷加 TDS 欄位很小，可做成選填數字並列入 preflight／REQ-37b 清單。
+- [ ] 舊路由保留並導向新元件；justCompleted 流程的導覽隱藏規則與測試不變。
+
+### 步驟 B：Flavor Feedback（06）＋5 星
+
+- [ ] 新增選填 `FlavorFeedback.stars`（1–5 整數）。新送出的評分**必須有星等**。舊紀錄只有 overallImpression（liked／neutral／disliked）：**不換算成星**，畫面上星等位置改顯示原本的喜歡／普通／不喜歡文字。
+- [ ] 版面：5 顆大星；「喝起來」可複選文字標籤（甜、酸、苦、乾淨、厚實、偏淡、香氣好、澀、平衡），選中加底線變粗、不用膠囊；「細一點」7 條細線滑桿（酸度、甜度、苦味、香氣、乾淨度、口感、餘韻，1–5，可不填）；筆記。
+- [ ] 資料對應：滑桿用既有 acidity／sweetness／bitterness／body（口感）／clarity（乾淨度）／aftertaste，新增選填 `aroma`；既有 `balance` 保留在資料裡、舊紀錄照常顯示，新表單不再出現。文字標籤和既有 FlavorNote enum 語意不同，新增選填 `tasteTags`（上面九個值的 enum），舊 flavorNotes 保留不轉換。
+- [ ] overallImpression 目前必填：新表單不再問，存檔時不要偽造值。把它改成選填（舊資料仍讀得到），所有讀它的地方（分析規則、Journal、搬移 preflight）改成「有 stars 用 stars，沒有才看 overallImpression」。
+- [ ] 按鈕「儲存｜儲存＋✦ AI 分析」：一定能只儲存。「儲存＋AI 分析」接現有的規則分析頁，按鈕文字保留 ✦。
+- [ ] 新欄位 stars、aroma、tasteTags（以及 TDS 若有做）加進 cloud-migration preflight 擋下清單與 Notion REQ-37b mapper 清單。
+
+### 步驟 C：把星等接到已經做好的地方
+
+- [ ] Collection 豆子卡：「沖過 N 次 · 最佳 N/5」，只算有 stars 的杯；沒有就只寫「沖過 N 次」。
+- [ ] Bean Detail：「沖過 N 次　最好的一杯 ★★★★★」＋右側「全部紀錄」；Journal 列與 Bean Detail 最近幾杯的星等＋↑↓（同豆子、上一杯也有 stars 才顯示，↑ 用 --green、↓ 用 --accent，要有 aria-label）。
+- [ ] 390×844 截圖：剛沖完、評分頁、已評分、Collection、Bean Detail、Journal。
+
+### 每步共通
+lint、typecheck、全部測試、build 全過即 commit＋push，Notion 更新，handoff 寫在 docs/project/batch-3-*.md。全部做完在 codex-to-claude.md 寫「批次 3 完成」。不 merge main、不部署、不改 SQL／雲端。

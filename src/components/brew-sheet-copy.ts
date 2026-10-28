@@ -1,5 +1,5 @@
 export const brewSheetCopy = {
-  dose: "粉量", water: "水量", ratio: "粉水比", temperature: "水溫", grind: "研磨", time: "總時間",
+  late:"晚", early:"早", seconds:"秒", recipeTime:"配方", dose: "粉量", water: "水量", ratio: "粉水比", temperature: "水溫", grind: "研磨", time: "總時間",
   planned: "配方目標", measured: "實際", steps: "STEPS", elapsed: "已過", next: "接下來",
   drain: "等水位降到粉床", drainAction: "已濾乾，下一段", nextStage: "下一段",
   pause: "暫停", resume: "繼續", settings: "沖煮設定", voice: "語音提示",

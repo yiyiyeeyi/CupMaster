@@ -92,6 +92,7 @@ V1 成功標準：
 
 | 日期 | 決策 | 要點 |
 |---|---|---|
+| 2026-10-28 | 批次 3：這一杯與五星回饋 | 使用者選 A：共用這一杯兩狀態；新回饋必填1–5星，overallImpression選填且舊值不換算；aroma／tasteTags選填，舊balance／flavorNotes保留；可只儲存，分析沿用本機規則；同豆子星等比較，無資料不顯示；TDS暫只放說明文字，不改雲端 |
 | 2026-10-27 | 批次 2 本機 Collection／Bean Detail 與刻度格式 | 使用者定案：刻度依型號 single／compound／number；新增全選填 Bean 庫與每杯快照；舊豆子匯入需確認。Collection 只做豆子／方案，實頁完成後加入第五格導覽。Bean Detail 不放無來源星等／AI；不改 SQL／雲端，不強迫選 Bean |
 | 2026-10-26 | REQ-39 首次使用與＋種子 | 根路由直接 Discover；＋只取非 legacy 的 completed／abandoned Brew，createdAt 由新到舊、同時以 id 決勝；只有 not_started 草稿時用 gentle-start。舊路由保留 query，returnTo 需安全檢查；沖煮與完成流程隱藏導覽 |
 | 2026-10-26 | REQ-39 可換配方與偏好界線 | 換配方清除 appliedAdjustment、sourceBrewId、sourcePreparationId 並提示，不消耗原準備；同杯 reset 不換 Snapshot。新偏好優先，需求只用 PRD 選項，舊 UserProfile 唯讀；暱稱與 bootstrap 拆 REQ-39b，本輪不做 |

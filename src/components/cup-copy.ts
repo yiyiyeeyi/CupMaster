@@ -1,0 +1,1 @@
+export const cupCopy={loading:"正在讀取這一杯…",missing:"找不到這一杯。",back:"返回 Journal",title:"這一杯",complete:"BREW COMPLETE · 剛沖完",edit:"編輯",unrated:"還沒評分",parameters:"沖煮參數",target:"配方目標",actual:"實際",tdsHint:"有 TDS 計的話",tdsEntry:"輸入 TDS ›",editFeedback:"編輯評分",analyze:"✦ AI 分析",again:"再沖一次",save:"先存起來",rate:"幫這杯評分",impressions:{liked:"喜歡",neutral:"普通",disliked:"不喜歡"}} as const;
