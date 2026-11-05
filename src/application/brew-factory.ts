@@ -1,4 +1,4 @@
-import type { Brew, BrewPlan, BrewRecipeSnapshot, QuickPrepareInput, Recipe, RecipeStepGuidance, ResolvedParameter } from "@/domain";
+import type { Brew, BrewPlan, BrewRecipeSnapshot, PourPath, QuickPrepareInput, Recipe, RecipeStepGuidance, ResolvedParameter } from "@/domain";
 import { calculateRatio, quickPrepareSchema } from "@/domain";
 
 export interface FactoryDependencies { now?: () => string; createId?: () => string; }
@@ -12,8 +12,9 @@ function resolved<T>(value: T, recipeDefault: T): ResolvedParameter<T> { return 
 function cloneGuidance(guidance: RecipeStepGuidance): RecipeStepGuidance {
   return { ...guidance, ...(guidance.details && { details: guidance.details.map((detail) => ({ ...detail })) }) };
 }
-function orderedStages(recipe: Recipe) { return [...recipe.currentVersion.steps].sort((a, b) => a.order - b.order).map((step) => ({ id: step.id, order: step.order, title: step.title, targetWaterGrams: step.targetWaterGrams, targetDurationSeconds: step.durationSeconds, pattern: step.pattern, instruction: step.instruction, ...(step.guidance && { guidance: cloneGuidance(step.guidance) }) })); }
-function clonedSteps(recipe: Recipe) { return [...recipe.currentVersion.steps].sort((a, b) => a.order - b.order).map((step) => ({ ...step, ...(step.guidance && { guidance: cloneGuidance(step.guidance) }) })); }
+function clonePourPath(pourPath: PourPath): PourPath { return { version: pourPath.version, points: pourPath.points.map((point) => ({ ...point })) }; }
+function orderedStages(recipe: Recipe) { return [...recipe.currentVersion.steps].sort((a, b) => a.order - b.order).map((step) => ({ id: step.id, order: step.order, title: step.title, targetWaterGrams: step.targetWaterGrams, targetDurationSeconds: step.durationSeconds, pattern: step.pattern, pourMethod: step.pourMethod, ...(step.pourPath && { pourPath: clonePourPath(step.pourPath) }), instruction: step.instruction, ...(step.guidance && { guidance: cloneGuidance(step.guidance) }) })); }
+function clonedSteps(recipe: Recipe) { return [...recipe.currentVersion.steps].sort((a, b) => a.order - b.order).map((step) => ({ ...step, ...(step.pourPath && { pourPath: clonePourPath(step.pourPath) }), ...(step.guidance && { guidance: cloneGuidance(step.guidance) }) })); }
 export function createQuickPrepareDefaults(recipe: Recipe): QuickPrepareInput { const version = recipe.currentVersion; return { recipeVersionId: version.id, coffeeDose: version.doseGrams, waterTotal: version.totalWaterGrams, waterTemperature: version.temperatureCelsius, dripper: version.dripper, grindSetting: version.grindDescription }; }
 export function resetRecipeParameters(input: QuickPrepareInput, recipe: Recipe): QuickPrepareInput { const defaults = createQuickPrepareDefaults(recipe); return { ...input, coffeeDose: defaults.coffeeDose, waterTotal: defaults.waterTotal, waterTemperature: defaults.waterTemperature, dripper: defaults.dripper, grindSetting: defaults.grindSetting }; }
 

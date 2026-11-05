@@ -25,8 +25,13 @@ const recipeStepGuidanceSchema = z.object({
 });
 
 export const pourMethodSchema = z.enum(["circle", "center", "outward", "inward", "coin", "excavate", "drain"]);
+export const pourPathSchema = z.object({
+  version: z.literal(1),
+  points: z.array(z.object({ t: z.number().finite().nonnegative(), x: z.number().finite(), y: z.number().finite() })),
+});
 const recipeStepSchema = z.object({
   pourMethod: pourMethodSchema.optional(),
+  pourPath: pourPathSchema.optional(),
   id: z.string().min(1), order: z.number().int().positive(), title: z.string().min(1),
   targetWaterGrams: z.number().positive(), durationSeconds: z.number().positive().optional(),
   pattern: z.enum(["center", "spiral", "pulse", "continuous", "immersion"]).optional(), instruction: z.string().min(1),

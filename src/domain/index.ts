@@ -4,6 +4,7 @@ export * from "./schemas";
 export * from "./recipe-utils";
 export * from "./brew-timer";
 export * from "./brew-summary";
+export * from "./pour-path";
 export * from "./flavor-feedback";
 export * from "./brew-record-details";
 export * from "./brew-analysis";

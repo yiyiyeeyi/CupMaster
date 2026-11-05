@@ -4,7 +4,11 @@ import { brewPersistenceSchema } from "@/data/local-brew-schema";
 import type { Json, Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { brewRowSchema, CloudMappingError, parseActiveRow,brewParityColumnsSchema } from "../cloud-row-schemas";
 
-const json = (value: unknown): Json => z.json().parse(value);
+function json(value: unknown): Json {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) throw new TypeError("Brew JSON payload is not serializable.");
+  return z.json().parse(JSON.parse(serialized));
+}
 type BrewParityColumns = z.infer<typeof brewParityColumnsSchema>;
 type BrewInsert = Omit<TablesInsert<"brews">, keyof BrewParityColumns> & BrewParityColumns;
 type BrewUpdate = Omit<TablesUpdate<"brews">, keyof BrewParityColumns> & Partial<BrewParityColumns>;

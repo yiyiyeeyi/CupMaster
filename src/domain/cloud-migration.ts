@@ -40,20 +40,11 @@ export type MigrationGraphErrorCode = "unsupported_local_beans" | "unsupported_l
 export interface MigrationGraphError { code: MigrationGraphErrorCode; entityId: string; message: string; }
 export interface LocalCloudMigrationGraph { beans?:readonly BeanRecord[]; beanCatalogUnavailable?:boolean; preparations?:readonly PreparationSyncRecord[]; preparationCatalogUnavailable?:boolean; libraryState?:unknown; profile: unknown | null; brews: readonly Brew[]; suggestedPlans: readonly SuggestedBrewPlan[]; }
 
-/** Fail closed until REQ-37b can preserve every optional local field. */
-export function hasUnmappedLocalBrewFields(brew: Brew): boolean {
-  // REQ-37b round-trip coverage now preserves every known Brew field in JSONB
-  // or parity columns. Keep this named guard for callers and future additions.
-  void brew;
-  return false;
-}
-
 export function validateLocalCloudMigrationGraph(input: LocalCloudMigrationGraph) {
   const errors: MigrationGraphError[] = [];
   if(input.beanCatalogUnavailable)errors.push({code:"unsupported_local_beans",entityId:"bean-catalog",message:"豆子庫無法讀取，保留本機並重試。"});
   if(input.preparationCatalogUnavailable)errors.push({code:"unsupported_local_preparation",entityId:"preparation-catalog",message:"準備紀錄無法讀取，保留本機並重試。"});
   const preparationIds=new Set<string>();for(const preparation of input.preparations??[]){if(preparationIds.has(preparation.id))errors.push({code:"unsupported_local_preparation",entityId:preparation.id,message:"準備紀錄 ID 重複，保留本機。"});preparationIds.add(preparation.id);}
-  for (const brew of input.brews) if (hasUnmappedLocalBrewFields(brew)) errors.push({ code: "unsupported_local_preparation", entityId: brew.id, message: "這筆紀錄含尚未支援雲端搬移的欄位；保留本機，請待 REQ-37b。" });
   const brewCounts = new Map<string, number>(), planCounts = new Map<string, number>();
   for (const brew of input.brews) brewCounts.set(brew.id, (brewCounts.get(brew.id) ?? 0) + 1);
   for (const plan of input.suggestedPlans) planCounts.set(plan.id, (planCounts.get(plan.id) ?? 0) + 1);

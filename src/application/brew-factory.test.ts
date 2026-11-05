@@ -36,6 +36,14 @@ describe("Quick Prepare validation and factories", () => {
     expect(plan.stages[0].guidance?.details?.[0].message).toBe("Swirl gently.");
     expect(snapshot.steps[0].guidance?.details?.[0].message).toBe("Swirl gently.");
   });
+  it("copies optional pour paths into both Brew snapshots without shared point references", () => {
+    const copy = structuredClone(recipe);
+    copy.currentVersion.steps[0].pourPath = { version: 1, points: [{ t: 0, x: 0, y: 0 }, { t: 0.1, x: 0.2, y: -0.1 }] };
+    const { plan, snapshot } = createBrewPlan(copy, defaults, deps);
+    copy.currentVersion.steps[0].pourPath.points[1].x = 0.9;
+    expect(snapshot.steps[0].pourPath?.points[1].x).toBe(0.2);
+    expect(plan.stages[0].pourPath?.points[1].x).toBe(0.2);
+  });
   it("creates the required initial Draft state", () => { const draft = createBrewDraft(recipe, defaults, deps); expect(draft).toMatchObject({ executionStatus: "not_started", recordStatus: "draft", feedbackStatus: "not_requested", analysisStatus: "not_requested", currentStageOrder: 0, startedAt: null, completedAt: null, pausedAt: null, accumulatedPauseSeconds: 0, stageResults: [] }); });
   it("creates a Draft without Bean or Equipment", () => { const draft = createBrewDraft(recipe, { ...defaults, grindSetting: undefined }, deps); expect(draft.recipeSnapshot.bean).toBeUndefined(); expect(draft.recipeSnapshot.equipment).toBeUndefined(); expect(draft.brewPlan.equipmentNotes).toBeUndefined(); expect(draft.feedbackStatus).toBe("not_requested"); expect(draft.analysisStatus).toBe("not_requested"); });
 });

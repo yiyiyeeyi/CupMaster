@@ -150,7 +150,7 @@ export class SuggestedPlanService {
       ...(snapshot.bean && { beanMetadata: { name: snapshot.bean.name } }),
       ...(snapshot.equipment?.notes && { equipmentNotes: snapshot.equipment.notes }),
       ...(snapshot.userGoal && { userGoal: snapshot.userGoal }), expectedTotalTime: snapshot.expectedTimeSeconds.value,
-      stages: snapshot.steps.map((step) => ({ id: step.id, order: step.order, title: step.title, targetWaterGrams: step.targetWaterGrams, targetDurationSeconds: step.durationSeconds, pattern: step.pattern, instruction: step.instruction })),
+      stages: snapshot.steps.map((step) => ({ id: step.id, order: step.order, title: step.title, targetWaterGrams: step.targetWaterGrams, targetDurationSeconds: step.durationSeconds, pattern: step.pattern, pourMethod: step.pourMethod, ...(step.pourPath && { pourPath: { version: step.pourPath.version, points: step.pourPath.points.map((point) => ({ ...point })) } }), instruction: step.instruction })),
       createdAt: now,
     };
     const brew: Brew = {

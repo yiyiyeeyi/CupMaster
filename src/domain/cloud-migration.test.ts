@@ -35,6 +35,8 @@ describe("migration graph validation", () => {
     ["feedback without legacy impression", (b:Brew)=>{b.flavorFeedback={id:"f",brewId:b.id,flavorNotes:[],createdAt:b.createdAt,updatedAt:b.updatedAt};}],
     ["step method", (b:Brew)=>{b.recipeSnapshot.steps[0].pourMethod="drain";}],
     ["stage method", (b:Brew)=>{b.brewPlan.stages[0].pourMethod="outward";}],
+    ["step pour path", (b:Brew)=>{b.recipeSnapshot.steps[0].pourPath={version:1,points:[{t:0,x:0,y:0},{t:0.1,x:0.4,y:-0.2}]};}],
+    ["stage pour path", (b:Brew)=>{b.brewPlan.stages[0].pourPath={version:1,points:[{t:0,x:0,y:0},{t:0.1,x:0.4,y:-0.2}]};}],
   ] as const)("accepts round-trip covered %s",(_,change)=>{
     const graph=validGraph();change(graph.brews[0]);const before=structuredClone(graph);
     const result=validateLocalCloudMigrationGraph(graph);

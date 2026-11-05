@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CupMaster pour path annotator</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;background:#171716;color:#f5f1e8}*{box-sizing:border-box}body{margin:0;padding:20px;max-width:1200px;margin-inline:auto}h1{font-size:1.5rem;margin:0 0 4px}.hint{color:#c8c2b5;margin:0 0 16px}.toolbar,.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px}.stage{position:relative;width:100%;background:#000;line-height:0;min-height:180px;display:grid;place-items:center}.stage video{display:block;width:100%;height:auto;max-height:72vh;object-fit:contain}.stage canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.panel{background:#252523;padding:14px;border-radius:10px}.panel h2{font-size:1rem;margin:0 0 8px}button,input{font:inherit}button{background:#3b3934;border:1px solid #777165;border-radius:7px;color:inherit;padding:7px 10px;cursor:pointer}button[aria-pressed=true]{background:#8d4c32;border-color:#e5a276}button:disabled{opacity:.45;cursor:not-allowed}input[type=text],input[type=number]{background:#161615;border:1px solid #777165;border-radius:6px;color:inherit;padding:6px;min-width:80px}label{display:flex;align-items:center;gap:6px}.primary{background:#a65c3d;border-color:#dc936c}.status{min-height:1.5em;color:#f4caa9}.point-list{max-height:210px;overflow:auto;font:12px ui-monospace,monospace;color:#d9d3c8}.point-list div{padding:2px 0;border-bottom:1px solid #45433e}.full{width:100%}small{color:#c8c2b5}@media(max-width:800px){body{padding:12px}.layout{grid-template-columns:1fr}.stage video{max-height:55vh}}
+  </style>
+</head>
+<body>
+  <h1>Pour Path Annotator</h1>
+  <p class="hint">影片只在本機瀏覽器開啟。先標濾杯中心與半徑，再逐幀標記水柱落點；沒在注水的空檔不要加點。</p>
+  <div class="toolbar">
+    <label>選本機影片 <input id="video-file" type="file" accept="video/*"></label>
+    <label>匯入標註 <input id="json-file" type="file" accept="application/json,.json"></label>
+    <label>步進秒 <input id="step-size" type="number" min="0.01" max="2" step="0.01" value="0.1" style="width:80px"></label>
+    <button id="back">− 步進</button><button id="forward">＋ 步進</button>
+    <button id="mark-center">標濾杯中心</button><button id="mark-radius">標濾杯半徑</button>
+    <button id="mark-point" class="primary">標水柱落點</button>
+  </div>
+  <div class="layout">
+    <div>
+      <div class="stage" id="stage"><video id="video" controls playsinline></video><canvas id="overlay"></canvas></div>
+      <div class="toolbar">
+        <label>Step ID <input id="step-id" type="text" value="step-1"></label>
+        <label>本段起始時間 (s) <input id="segment-start" type="number" min="0" step="0.1" value="0"></label>
+        <button id="set-start">起始時間設為目前播放位置</button>
+        <button id="undo">復原一點</button>
+        <button id="clear">清除此 Step</button>
+      </div>
+      <p id="status" class="status" role="status">選擇影片開始。</p>
+    </div>
+    <aside class="panel">
+      <h2>目前參數</h2>
+      <p id="geometry">中心：未設定<br>半徑：未設定</p>
+      <p id="clock">時間：0.00s</p>
+      <label><input id="smooth" type="checkbox" checked>匯出時平滑相鄰點</label>
+      <p><small>座標以濾杯半徑為 1，中心為 (0,0)，右／下為正。</small></p>
+      <button id="export" class="primary full">匯出 trace JSON</button>
+      <h2 style="margin-top:18px">目前 Step 點數</h2>
+      <div id="point-list" class="point-list"></div>
+    </aside>
+  </div>
+  <script>
+    const video = document.querySelector("#video");
+    const canvas = document.querySelector("#overlay");
+    const context = canvas.getContext("2d");
+    const status = document.querySelector("#status");
+    const centerLabel = document.querySelector("#geometry");
+    const pointList = document.querySelector("#point-list");
+    const paths = new Map();
+    let center = null;
+    let radius = null;
+    let mode = null;
+    let videoUrl = null;
+    const activeStep = () => document.querySelector("#step-id").value.trim() || "step-1";
+    const pointsForStep = () => paths.get(activeStep()) ?? [];
+    const stepSeconds = () => Math.max(0.01, Number(document.querySelector("#step-size").value) || 0.1);
+    function setStatus(message){status.textContent=message;}
+    function resizeOverlay(){if(!video.videoWidth)return;canvas.width=video.videoWidth;canvas.height=video.videoHeight;draw();}
+    function draw(){
+      if(!canvas.width||!canvas.height)return;
+      context.clearRect(0,0,canvas.width,canvas.height);
+      if(center&&radius){context.beginPath();context.arc(center.x,center.y,radius,0,Math.PI*2);context.strokeStyle="#f2dfc7";context.lineWidth=Math.max(2,canvas.width/500);context.setLineDash([8,6]);context.stroke();context.setLineDash([]);}
+      const points=pointsForStep();
+      for(let i=0;i<points.length;i++){
+        const p=points[i];const x=center&&radius?center.x+p.x*radius:0;const y=center&&radius?center.y+p.y*radius:0;
+        if(i>0&&points[i].t-points[i-1].t<=0.25){const previous=points[i-1];context.beginPath();context.moveTo(center.x+previous.x*radius,center.y+previous.y*radius);context.lineTo(x,y);context.strokeStyle="#e4a270";context.lineWidth=Math.max(2,canvas.width/350);context.stroke();}
+        context.beginPath();context.arc(x,y,Math.max(3,canvas.width/180),0,Math.PI*2);context.fillStyle="#ffb46e";context.fill();
+      }
+      if(center){context.beginPath();context.arc(center.x,center.y,Math.max(3,canvas.width/170),0,Math.PI*2);context.fillStyle="#f8f0df";context.fill();}
+      centerLabel.innerHTML=`中心：${center?`${center.x.toFixed(1)}, ${center.y.toFixed(1)}`:"未設定"}<br>半徑：${radius?radius.toFixed(1):"未設定"}`;
+      document.querySelector("#clock").textContent=`時間：${video.currentTime.toFixed(2)}s`;
+      pointList.replaceChildren(...points.slice(-30).map(p=>{const row=document.createElement("div");row.textContent=`t ${p.t.toFixed(2)} · x ${p.x.toFixed(3)} · y ${p.y.toFixed(3)}`;return row;}));
+    }
+    function seekBy(delta){if(video.readyState)video.currentTime=Math.max(0,Math.min(video.duration||0,video.currentTime+delta));}
+    document.querySelector("#video-file").addEventListener("change",event=>{
+      const file=event.target.files?.[0];if(!file)return;
+      if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=URL.createObjectURL(file);video.src=videoUrl;video.load();setStatus(`本機影片已載入：${file.name}`);
+    });
+    video.addEventListener("loadedmetadata",resizeOverlay);video.addEventListener("timeupdate",draw);video.addEventListener("seeked",draw);window.addEventListener("resize",draw);
+    document.querySelector("#back").addEventListener("click",()=>seekBy(-stepSeconds()));document.querySelector("#forward").addEventListener("click",()=>seekBy(stepSeconds()));
+    document.querySelector("#mark-center").addEventListener("click",()=>{mode="center";setStatus("點選濾杯中心。");});
+    document.querySelector("#mark-radius").addEventListener("click",()=>{mode="radius";setStatus("點選濾杯邊緣，設定半徑。");});
+    document.querySelector("#mark-point").addEventListener("click",()=>{mode="point";setStatus(`為 ${activeStep()} 標記目前影格的水柱落點。`);});
+    canvas.addEventListener("click",event=>{
+      if(!mode)return;const rect=canvas.getBoundingClientRect();const x=(event.clientX-rect.left)*canvas.width/rect.width;const y=(event.clientY-rect.top)*canvas.height/rect.height;
+      if(mode==="center"){center={x,y};radius=null;setStatus(`中心已設定。接著點「標濾杯半徑」並點濾杯邊緣。`);}
+      else if(mode==="radius"&&center){radius=Math.hypot(x-center.x,y-center.y);setStatus(`濾杯半徑 ${radius.toFixed(1)} px。`);}
+      else if(mode==="point"&&center&&radius){const step=activeStep();const points=paths.get(step)??[];const t=Math.max(0,video.currentTime-(Number(document.querySelector("#segment-start").value)||0));points.push({t:Number(t.toFixed(3)),x:Number(((x-center.x)/radius).toFixed(6)),y:Number(((y-center.y)/radius).toFixed(6))});points.sort((a,b)=>a.t-b.t);paths.set(step,points);setStatus(`已記錄 ${step} · ${t.toFixed(2)}s。可用方向鍵或步進按鈕前進 0.1 秒後繼續標記。`);}
+      else{setStatus("請先設定中心和半徑。");}
+      mode=null;draw();
+    });
+    document.querySelector("#set-start").addEventListener("click",()=>{document.querySelector("#segment-start").value=video.currentTime.toFixed(3);setStatus(`${activeStep()} 的相對時間起點已設為 ${video.currentTime.toFixed(2)}s。`);});
+    document.querySelector("#undo").addEventListener("click",()=>{const points=pointsForStep();points.pop();paths.set(activeStep(),points);draw();});
+    document.querySelector("#clear").addEventListener("click",()=>{paths.delete(activeStep());draw();setStatus(`已清除 ${activeStep()} 標註。`);});
+    function smooth(points){
+      return points.map((point,index)=>{const neighbors=points.filter((candidate,candidateIndex)=>Math.abs(candidateIndex-index)<=1&&Math.abs(candidate.t-point.t)<=0.25);return {t:point.t,x:Number((neighbors.reduce((sum,p)=>sum+p.x,0)/neighbors.length).toFixed(6)),y:Number((neighbors.reduce((sum,p)=>sum+p.y,0)/neighbors.length).toFixed(6))};});
+    }
+    document.querySelector("#export").addEventListener("click",()=>{
+      if(!center||!radius){setStatus("匯出前請設定濾杯中心與半徑。");return;}
+      const smoothEnabled=document.querySelector("#smooth").checked;
+      const steps=[...paths.entries()].filter(([,points])=>points.length).sort(([a],[b])=>a.localeCompare(b)).map(([id,points])=>({id,pourPath:{version:1,points:smoothEnabled?smooth(points):points}}));
+      const blob=new Blob([JSON.stringify({version:1,coordinateSystem:"dripper-radius",steps},null,2)],{type:"application/json"});const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="pour-path-trace.json";link.click();URL.revokeObjectURL(link.href);setStatus(`已匯出 ${steps.length} 個 Step；影片與影格沒有被匯出。`);
+    });
+    document.querySelector("#json-file").addEventListener("change",async event=>{
+      const file=event.target.files?.[0];if(!file)return;try{const input=JSON.parse(await file.text());paths.clear();for(const step of input.steps??[]){paths.set(step.id,step.pourPath.points.map(point=>({...point})));}draw();setStatus(`已匯入 ${paths.size} 個 Step，可繼續修點。`);}catch{setStatus("無法讀取標註 JSON，請確認檔案格式。");}
+    });
+    window.addEventListener("keydown",event=>{if(event.target instanceof HTMLInputElement)return;if(event.key==="[")seekBy(-stepSeconds());if(event.key==="]")seekBy(stepSeconds());});
+  </script>
+</body>
+</html>
