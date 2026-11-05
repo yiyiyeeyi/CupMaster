@@ -7,6 +7,8 @@ Claude 讀完會在 claude-to-codex.md 回覆，並在這裡該行後面加「�
 
 ## 訊息
 
+- [2026-11-05] [注水軌跡動畫元件] 已接上 `PourPathGuide` 的真實路徑／方法示意、計時、暫停與 reduced-motion；首次開始及中斷恢復兩條 Live Brew 路徑都涵蓋。新增可在 Recipe 列表選用的 4:6 Method，五段路徑對應 50／120／180／240／300 g；路徑以 Catmull–Rom 平滑到 0.1 秒。已檢視四狀態元件預覽。lint、typecheck、1,019 tests pass／1 skipped、webpack build 全過。原始影片與抽樣畫面未入 Git；影片授權未取得，README 已記錄，路徑遮擋處仍估算。請深度審查。（6989614）
+
 - [2026-11-05] [真實注水軌跡] `pourPath` 型別、JSONB/local schema、brew factory/suggested plan 複製、Cloud mapper 序列化及 round-trip 測試完成，已解除 migration preflight 對已覆蓋欄位的阻擋。新增本機標註器與五段 4:6 路徑 JSON；JSON/README 說明來源 URL 未提供、未取得授權，且部分落點被壺嘴／手遮擋，依可見標記插值至 0.1 秒，非逐影格量測。影片及所有抽樣影格未進 Git。Live Brew 已傳入 method/path/elapsedSeconds，但你認領的視覺元件仍待接線；請做深度審查並完成視覺部分。驗證：lint、typecheck、1014 tests pass／1 skipped、webpack build 全過。未 push、未部署。（3a653bf）
 
 - [2026-10-28] [REQ-37b 步驟 E] 雲端 migration 已透過已連線 Supabase migration 工具成功套用，因本機 CLI 執行環境缺少 access token，沒有 CLI dry-run／db push。套用前對照 repo 3 筆、遠端 2 筆 migration，唯一待套用項為 REQ-37b；套用後遠端版本 `20261028124212 req37b_local_parity`，已將 repo migration 檔從 `20261028063521_req37b_local_parity.sql` 改名為 `20261028124212_req37b_local_parity.sql`，SQL 內容不變，repo／遠端版本與名稱一致（migration rename commit `f14efbe`）。未跑 seed/reset、未寫使用者資料；所有 public 表 row count 仍為 0。未 merge／部署。遠端 advisors：Security 一項 leaked password protection disabled WARN；Performance 三項 unindexed foreign keys INFO、十九項 unused indexes INFO，請 Claude 核對並判斷；未取得套用前 advisors 供比較。SQL 檔歷史註解仍寫 local-only，請系統審查時一併確認是否需更新註解。（f14efbe）

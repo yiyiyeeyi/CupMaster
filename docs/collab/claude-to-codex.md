@@ -309,6 +309,39 @@ SQL 自 5c03635 起未變更；雲端 ouniwzdxbcrektzynkak 目前只有 20260804
 yiyi 要讓沖煮畫面播放真人倒水的實際軌跡，不用示意路線；標註由 Codex 負責。視覺樣稿（Claude）：https://claude.ai/artifact/FM3ztXGdnLon46a2XKnPCG 。手動標註／檢查工具：https://claude.ai/artifact/9NvTn7vF9kEbjpdJUuKFKt ，兩者的 JSON 格式相同。
 
 - [x] **資料格式**：RecipeStep 新增選填 `pourPath: { version: 1, points: {t, x, y}[] }`。t 是這一段開始後的秒數；x、y 以濾紙半徑為 1、中心為 0（右、下為正）；放開水柱的空檔就不放點。只放 zod 形狀驗證；沒有 pourPath 時沿用 pourMethod 的示意路線。mapper 往返測試補上後解除 preflight fail-closed；資料存於 recipe_snapshot／brew_plan jsonb，未改 SQL。（3a653bf）
-- [x] **標註**：`tools/pour-trace/index.html` 可在本機選影片、定圓心／半徑、按 0.1 秒步進標落點、依 Step 匯出正規化 JSON；`samples/4-6-method.json` 含五段路徑。抽樣以影片播放器約 0:20、1:00、1:50、2:30、3:00 對照畫面內注水段；人工標記可辨識落點後插值至 0.1 秒，遮擋點以相鄰標記補間，非逐影格量測。影片與抽樣影格未進 Git。（3a653bf）
+- [x] **標註**：`tools/pour-trace/index.html` 可在本機選影片、定圓心／半徑、按 0.1 秒步進標落點、依 Step 匯出正規化 JSON；`samples/4-6-method.json` 含五段路徑。抽樣以影片播放器約 0:20、1:00、1:50、2:30、3:00 對照畫面內注水段；人工標記可辨識落點後用 Catmull–Rom 插值至 0.1 秒，遮擋點以相鄰標記補間，非逐影格量測。影片與抽樣影格未進 Git。（6989614）
 - [x] 每支影片的來源與授權寫在 JSON 旁的 README；此來源的 URL 未提供、yiyi 說明未取得授權，README 已如實記錄且未納入影音素材。（3a653bf）
-- [ ] **播放**：Codex 已將目前階段的 `pourPath` 和實際階段秒數接到 `LiveBrewHud` props `{method, pourPath?, elapsedSeconds}`；Claude 認領的視覺元件尚未提供，因此虛線路線、暖色點／拖尾、濾紙邊線與 reduced-motion 樣式仍待接入驗收。（3a653bf）
+- [x] **播放**：`PourPathGuide` 已依目前階段的 `pourPath`／`method` 和真實階段秒數播放；虛線路線在提壺間隔斷開、暖色光點含拖尾、濾杯邊線細描，`prefers-reduced-motion` 顯示靜態位置。首次進入與重新載入／恢復兩條 Live Brew 路徑都已接線；暫停時凍結位置。4:6 Method Recipe 可在配方列表選用，五段目標與 JSON path 一一對應。（6989614）
+
+## 注水軌跡動畫元件完成（Claude＋Codex 2026-11-05）
+
+### 檔案
+- `src/components/pour-path-guide.tsx`：`export function PourPathGuide(props: PourPathGuideProps)`，`PourPathGuideProps = PourPathPlaybackProps & { paused?: boolean }`。
+- `src/components/pour-path-guide.css`：寬 `min(56vw,220px)`、正方形。
+- `src/components/pour-path-geometry.ts`：`sampleTrace`（真實軌跡插值，提壺空檔 >0.35 秒不顯示光點，倒完 0.15 秒後光點消失）、`pourRuns`（虛線在空檔處斷開）、`sampleMethod`／`methodGuide`（沒有 pourPath 時的示意路線，沿用 yiyi 看過的樣稿）。
+- `src/components/pour-path-geometry.test.ts`：4 個測試。
+- 小改兩個你的檔案：`brew-sheet-copy.ts` 加 `pourPathLabel: "注水路線"`（無障礙標籤用）；`live-brew-hud.tsx` 把 `renderPourPath` 的插槽從 `<header>` 前面移到大克數和指引文字之間（原位置會被 flex 排版擠到最上面）。
+
+### 行為
+- 有 `pourPath` 就播真實軌跡，否則依 `method` 播示意路線；兩者都沒有回傳 null。drain 畫水位慢慢下降、不畫光點。
+- 計時器每 250 ms 更新一次，元件在兩次更新之間最多往前滑 0.3 秒，所以畫面順；**`paused` 為 true 時完全停在 `elapsedSeconds`，不滑動**。請傳 `paused={runtime.state === "paused"}`，這是「暫停時位置正確」的驗收條件。
+- `prefers-reduced-motion`：不跑 requestAnimationFrame，只在每次 props 更新時畫靜態路線和目前位置。
+- 外層 `role="img"`、`aria-label="注水路線：繞圈"`，canvas `aria-hidden`；依 devicePixelRatio 設 canvas 解析度。
+
+### 接線與驗收（Codex）
+```tsx
+renderPourPath={(props) => <PourPathGuide {...props} paused={runtime.state === "paused"} />}
+```
+放在 guided-brew-v1.tsx 的 `<LiveBrewHud>` 上。
+
+已在 `guided-brew-v1.tsx` 與已開始／恢復用的 `live-brew-draft.tsx` 傳入播放 props 和 paused 狀態。另新增可選的 `4:6 Method` fixture：五段 50／120／180／240／300 g，使用本檔五條 path；咖啡粉量 20 g、總水量 300 g 為配方預設值，使用者可在 Quick Prepare 調整。
+
+### 我做過的驗證
+- 幾何函式的測試在 Node 22 用同樣的斷言跑過，全過（VM 跑不了 vitest，請你跑正式的）。
+- draw 與幾何函式用 tsc 單獨型別檢查無錯；VM 上整個專案的 `tsc --noEmit` 沒有報這幾個檔案的錯。
+- 截圖 `docs/collab/pour-path-guide-preview.png`：4:6 第 1 段真實軌跡 3.5 秒、倒完之後、無軌跡示意繞圈、減少動態效果。
+
+樣本以可辨識的抽樣標記用 Catmull–Rom 平滑到 0.1 秒；壺嘴／手遮擋處仍為估算，非逐影格量測。請在正式公開教學前由 yiyi 用原片和標註工具確認落點。
+
+### 釋出
+接線與驗收已完成；`pour-path*` 元件檔已隨 commit `6989614` 釋出給 Codex 一起維護。完整 lint、typecheck、1,019 tests pass／1 skipped 與 production build 通過；元件四狀態預覽見 `docs/collab/pour-path-guide-preview.png`。（6989614）
