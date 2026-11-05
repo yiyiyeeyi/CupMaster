@@ -19,6 +19,13 @@ describe("pour path", () => {
     expect(recipeSchema.safeParse(recipe).success).toBe(true);
   });
 
+  it("exposes the five traced paths through the selectable 4:6 teaching recipe", () => {
+    const recipe = recipeFixtures.find(({ id }) => id === "four-six-method");
+    expect(recipe?.currentVersion.steps.map(({ targetWaterGrams }) => targetWaterGrams)).toEqual([50, 120, 180, 240, 300]);
+    expect(recipe?.currentVersion.steps.every(({ pourPath }) => Boolean(pourPath?.points.length))).toBe(true);
+    expect(recipe?.currentVersion.steps.map(({ pourPath }) => pourPath?.points.length)).toEqual([81, 41, 41, 41, 41]);
+  });
+
   it("uses the path when present and falls back to legacy method with clamped elapsed time", () => {
     const path = { version: 1 as const, points: [{ t: 0, x: 0, y: 0 }] };
     expect(createPourPathPlaybackProps({ pourMethod: "outward", pourPath: path }, 3.5)).toEqual({ method: "outward", pourPath: path, elapsedSeconds: 3.5 });

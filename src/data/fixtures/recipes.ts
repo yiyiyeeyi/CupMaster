@@ -1,5 +1,6 @@
 import { recipeSchema } from "@/domain";
 import type { Recipe } from "@/domain";
+import fourSixMethodTrace from "../../../tools/pour-trace/samples/4-6-method.json";
 
 const createdAt = "2026-07-15T00:00:00.000Z";
 const rawRecipes = [
@@ -8,6 +9,7 @@ const rawRecipes = [
   { id: "center-focus", title: "Center Focus", description: "A low-agitation center-pour recipe suited to rounder, deeper cups.", author: "CupMaster", dose: 16, water: 240, temp: 91, grind: "Medium", dripper: "Flat-bottom dripper", time: 170, difficulty: "easy", roast: ["medium", "medium_dark"], steps: [["Bloom", 48, 40, "center", "Pour through the center, then gently swirl."], ["Center pour", 150, 50, "center", "Maintain a narrow steady stream."], ["Finish", 240, 45, "center", "Continue at the center to target."]] },
   { id: "quick-morning", title: "Quick Morning", description: "A short, practical brew with one bloom and one continuous pour.", author: "General Method", dose: 12, water: 200, temp: 92, grind: "Medium-fine", dripper: "Cone dripper", time: 125, difficulty: "beginner", roast: ["medium_light", "medium"], steps: [["Bloom", 36, 30, "spiral", "Wet all coffee quickly."], ["Continuous pour", 200, 60, "continuous", "Pour smoothly without stopping."]] },
   { id: "clarity-pulse", title: "Clarity Pulse", description: "Five precise pulses for experienced brewers exploring high clarity.", author: "Community Method", dose: 18, water: 300, temp: 95, grind: "Medium-fine, adjust for drawdown", dripper: "V60 02", time: 210, difficulty: "advanced", roast: ["light"], steps: [["Bloom", 54, 45, "spiral", "Saturate and swirl once."], ["Pulse one", 110, 25, "spiral", "Use a controlled circular pour."], ["Pulse two", 165, 25, "spiral", "Let the slurry fall slightly."], ["Pulse three", 230, 25, "center", "Reduce agitation at center."], ["Final pulse", 300, 25, "center", "Finish gently and allow drawdown."]] },
+  { id: "four-six-method", title: "4:6 Method", description: "A five-pour teaching recipe with a visible guide path for each pour.", author: "CupMaster", dose: 20, water: 300, temp: 92, grind: "Medium-fine", dripper: "V60 02", time: 210, difficulty: "easy", roast: ["light", "medium_light", "medium"], steps: [["First pour · 50 g", 50, 40, "spiral", "照著光點注水至 50 g；等待粉床下降，再開始下一段。"], ["Second pour · 120 g", 120, 50, "spiral", "沿光點注水至 120 g；等待粉床下降，再開始下一段。"], ["Third pour · 180 g", 180, 40, "spiral", "沿光點注水至 180 g；等待粉床下降，再開始下一段。"], ["Fourth pour · 240 g", 240, 30, "spiral", "沿光點注水至 240 g；等待粉床下降，再開始下一段。"], ["Final pour · 300 g", 300, 50, "spiral", "沿光點注水至 300 g，等待咖啡濾乾。"]] },
 ] as const;
 
 export const recipeFixtures: Recipe[] = rawRecipes.map((item) => recipeSchema.parse({
@@ -17,6 +19,6 @@ export const recipeFixtures: Recipe[] = rawRecipes.map((item) => recipeSchema.pa
     method: "pour_over", author: item.author, doseGrams: item.dose, totalWaterGrams: item.water,
     temperatureCelsius: item.temp, grindDescription: item.grind, dripper: item.dripper,
     expectedTimeSeconds: item.time, difficulty: item.difficulty, roastSuitability: [...item.roast], createdAt,
-    steps: item.steps.map(([title, targetWaterGrams, durationSeconds, pattern, instruction, guidance], index) => ({ id: `${item.id}-step-${index + 1}`, order: index + 1, title, targetWaterGrams, durationSeconds, pattern, instruction, ...(guidance && { guidance }) })),
+    steps: item.steps.map(([title, targetWaterGrams, durationSeconds, pattern, instruction, guidance], index) => ({ id: `${item.id}-step-${index + 1}`, order: index + 1, title, targetWaterGrams, durationSeconds, pattern, instruction, ...(guidance && { guidance }), ...(item.id === "four-six-method" && fourSixMethodTrace.steps[index] && { pourPath: fourSixMethodTrace.steps[index].pourPath }) })),
   },
 }));

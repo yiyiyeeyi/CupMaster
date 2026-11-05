@@ -5,7 +5,7 @@ import { MockRecipeRepository } from "./mock-recipe-repository";
 
 describe("MockRecipeRepository and recipe domain", () => {
   const repository = new MockRecipeRepository();
-  it("lists at least five recipes", async () => { expect(await repository.listRecipes()).toHaveLength(5); });
+  it("lists the seeded recipes including 4:6 Method", async () => { const recipes = await repository.listRecipes(); expect(recipes).toHaveLength(6); expect(recipes.map(({ id }) => id)).toContain("four-six-method"); });
   it("gets a recipe by id", async () => { expect((await repository.getRecipeById("gentle-start"))?.id).toBe("gentle-start"); });
   it("returns null for an unknown recipe", async () => { expect(await repository.getRecipeById("missing")).toBeNull(); });
   it("sorts beginner recipes deterministically", () => { const first = sortRecipesForExperience(recipeFixtures, "beginner").map((item) => item.id); const second = sortRecipesForExperience(recipeFixtures, "beginner").map((item) => item.id); expect(first).toEqual(second); expect(["gentle-start", "quick-morning"]).toContain(first[0]); });
