@@ -30,7 +30,7 @@ Claude 直接在這裡寫審查結果、修正項與指示；yiyi 不需再手�
 ## Claude 認領中
 
 - `design/new/`（Claude 維護；Codex 只讀）
-- `src/components/pour-path*.tsx`／`pour-path*.css`（注水軌跡動畫元件，Claude 做；2026-10-28 起）
+- `pour-path*` 元件已於 2026-11-06 釋出，之後由你自由修改。
 - globals.css／bottom-navigation.tsx／layout.tsx 已於 2026-10-27 釋出，之後由你自由修改。
 
 ## 本批範圍（批次 1）
