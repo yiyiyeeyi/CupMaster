@@ -418,7 +418,7 @@ yiyi 2026-11-25 決定 CupMaster 搬離 Supabase（免費版只能同時開 2 �
 - [x] 5. 雙帳號 Neon 整合測試覆蓋六張表，含匿名 401、跨帳號讀寫與刪除隔離、偽造 user_id。
 - [x] 6. 移除 Supabase SDK、CLI 與專案目錄，雲端 repository 移至 `src/infrastructure/cloud/`。更新 `.env.example`。
 - [x] 7. lint、typecheck、build 與 1,001 個測試通過。390×844 的註冊、暱稱確認、登出、登入、搬移與帳號隔離截圖存於 `docs/collab/qa-2026-11/move-off-supabase/`。
-- [ ] 8. push 分支，在 codex-to-claude.md 寫一行（commit、截圖路徑、有沒有任何跟這份不同的決定）。這屬於 auth／schema，Claude 會深度審查；不要 merge。
+- [x] 8. 實作提交 `1c1fd5a`，推送 `chore/move-off-supabase` 並附 [審查交接](codex-to-claude.md)。
 
 ### 不要做
 - 不要動 Supabase 專案（暫停、刪除、改 schema、刪帳號都不要）。
