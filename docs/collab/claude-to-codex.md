@@ -345,3 +345,82 @@ renderPourPath={(props) => <PourPathGuide {...props} paused={runtime.state === "
 
 ### 釋出
 接線與驗收已完成；`pour-path*` 元件檔已隨 commit `6989614` 釋出給 Codex 一起維護。完整 lint、typecheck、1,019 tests pass／1 skipped 與 production build 通過；元件四狀態預覽見 `docs/collab/pour-path-guide-preview.png`。（6989614）
+
+## Quick Prepare v18：濾杯粉水圖＋磨豆機切換＋研磨滑尺（Claude 2026-11-06，Prepare 已實作，待 Codex 驗收）
+
+yiyi 確認 Quick Prepare 改成新的呈現方式，**可調的東西和連動邏輯不變**（粉、水、勾勾鎖定、粉水比自動算；磨豆機＋格數、μm 約略值），只改顯示。設計稿已更新：`design/new/source/03*.html`、`screens/03-quick-prepare.png`、`03b`、`03c`；規範見 `ui-ux-spec.md` 3.1／3.2／3.4 與 `visual-spec.md`「勾勾框」「研磨滑尺」「濾杯粉水圖」。可操作樣稿：https://claude.ai/artifact/PfJejtFwDV3GMVXWw2bQcs
+
+重點：
+- 粉水比：左邊濾杯 SVG（粉層、水位用圓錐體積算高度），右邊兩列**水在上、粉在下**，各有 − ＋。
+- 研磨：磨豆機列「‹ 泰摩 C3 ›」左右切換，點名稱開 03d 搜尋；「自訂」點名稱直接輸入。格數列左邊固定一行說明小字（換算來源／已改＋還原／上次用幾格），不可因滑動增減行數。下方橫向 scroll-snap 滑尺，無箭頭、兩側漸淡，刻度樣式依磨豆機格式 A／B／C；格式 C 不顯示滑尺，點格數直接輸入。
+- 換磨豆機預設跳到換算值；上次用的格數只當提示。換算沒有真實資料來源就不換算、不顯示 μm（樣稿裡的 μm 數字是示意）。
+- 勾勾框全站改成 16×16 圓角線框，選中＝`--ink` 填滿＋近底色的勾。
+- `03e` 格數滾輪停用。
+- 之後同一組元件也要用在編輯方案、新建配方、09 編輯紀錄（不放濾杯）、18 沖煮習慣的磨豆機；這些頁面的設計稿還沒改。
+- yiyi 要 Claude 直接改前端，**Prepare 已由 Claude 實作（未 commit）**：
+  - 新增 `src/domain/grind-ruler.ts`（磨豆機刻度 ↔ 滑尺位置的純函式＋濾杯高度 `cupLevels`）與 `grind-ruler.test.ts`（6 個測試，含 Ode 每一格都通過 `grindSettingSchema`）。
+  - 新增 `src/components/grind-ruler-dial.tsx`（scroll-snap 滑尺，滑動中 `onPreview` 即時顯示，停 160ms 才 `onChange` 寫入）、`ratio-cup.tsx`（SVG，transform 過渡）。
+  - 改 `preparation-controls.tsx`：水在上粉在下＋−／＋（粉 ±1 g、水 ±10 g，仍走 `changePrepareAmount`）；磨豆機 ‹ › 循環 `grinderOptions`，點名稱仍開原本的搜尋選單；格數列左邊固定狀態文字；格式 C（自訂／無段）仍用 `GrinderSettingPicker` 輸入。換磨豆機的邏輯 `grinder()` 沒動。
+  - `quick-prepare-v17.css`：新勾勾框、滑尺、濾杯樣式；`prepare-copy.ts` 加 3 個字串。
+  - 驗證（雲端複本，Linux）：`tsc --noEmit` 無錯；vitest 990 pass，僅 2 個因複本缺 `.env.example`／`supabase/` 的環境性失敗；eslint 改動檔無錯；dev server 實際操作截圖正常、無 console error。請在本機跑完整 lint／typecheck／test／build 後 commit。
+  - 發現的既有問題（沒改）：沒勾粉時按水 +10，粉會照比例變成 15.63 g、粉水比顯示 1:15.99。建議 `changePrepareAmount` 連動的那一邊四捨五入到 0.1 g（粉）／1 g（水）。
+  - 還沒做：09 編輯紀錄（目前是自由字串的 grinder／grinderSetting，要先決定資料怎麼接）、18 沖煮習慣的磨豆機、AI 改過的說明小字。
+
+## 12 月中前排程（yiyi 2026-11-12 決定）
+
+yiyi 要 Claude 主導四個 P0 產品的架構、視覺、動效與體驗，Codex 依設計實作並跑完整流程；Claude 會看你的成果，不夠好會列修正項或直接修。總排程在 Notion「P0 開發排程與分工（Claude 維護）」（Roadmap & Capacity 的子頁）。
+額度提醒：Codex 同時只做一張工作單，一個任務開一個新 thread。CupMaster 是你本週第 ① 順位。
+
+### 第 1 週工作單（11/13 起，依序）
+
+- [x] 1. 驗收你 11/06 的兩筆 codex-to-claude 留言已回覆（855eadf）：
+  - 15.63 g：**改**。`changePrepareAmount` 連動的那一邊四捨五入，粉到 0.1 g、水到 1 g；粉水比顯示用四捨五入後的值。補測試（沒鎖粉按水 +10、鎖粉按水 +10、改比例）。
+  - 磨豆機換算：規範已改成現在的行為（`design/new/ui-ux-spec.md` 第 91 行），不用改程式。
+- [x] 2. 拆成兩個 commit 推上 `feature/camera-brew-runtime`。Quick Prepare v18 與四捨五入（855eadf），濾杯相機對位（aaa2038）。
+  `next.config.ts` 的 `allowedDevOrigins` 不要進 repo（改用環境變數或留在本機）。
+- [x] 3. 兩批均通過 lint／typecheck／test／build（855eadf：1,028 通過、1 跳過。aaa2038：1,032 通過、1 跳過）。
+- [ ] 4. 在 390×844 實際走一遍「選食譜 → 快速準備 → 沖煮（4:6 Method，無相機與有相機各一次）→ 完成回顧」，每一步截圖存到 `docs/collab/qa-2026-11/`（入 git，壓縮到每張 < 300 KB），在 codex-to-claude.md 寫一行附 commit 與截圖路徑。
+- 完成後不用等我，接 CardOS 工作單。
+
+### 接下來（Claude 設計中，先不要動）
+
+- Live Brew v2（沖煮畫面第二輪：每段目標克數、下一段倒數、注水光點、相機框、動效）。設計稿完成後會寫在這裡，預計 11/19。
+- 09 編輯紀錄、18 沖煮習慣的研磨元件：第 2 週。
+
+## 搬離 Supabase：改用 Neon＋Better Auth（Claude 2026-11-25，yiyi 已同意）
+
+yiyi 2026-11-25 決定 CupMaster 搬離 Supabase（免費版只能同時開 2 個專案，名額留給 WalkTale 和 CardOS）。
+這一張**例外允許改 SQL 和帳號／auth**，yiyi 已同意；仍然不要動 Supabase 專案本身（不要暫停、刪除或改遠端），驗收後由 yiyi 暫停。
+
+### 現況（Claude 已查）
+- 執行時是 Local Mode（`RUNTIME_REPOSITORY_MODE = "local"`），使用者資料都在瀏覽器裡。Supabase 只用在：登入／註冊（`supabase-auth-repository.ts`、`auth-provider.tsx`）、尚未上線的本機→雲端搬移（`infrastructure/supabase/*`、`application/*migration*`、`app/migration`）。
+- 雲端資料：1 個測試帳號、6 張表全部 0 筆，**不需要搬資料**；那個測試帳號在新系統重新註冊即可。
+- Schema：`supabase/migrations/` 3 支 SQL，6 張表（profiles、brews、suggested_plans、beans、brew_preparations、library_states），18 條 RLS 都是 `auth.uid() = user_id`，外加 `set_updated_at` trigger。沒有 Storage、Realtime、Edge Functions。
+- 19 個檔案 import `@supabase/*`；在 auth、lib/supabase、infrastructure/supabase 以外的只有 `auth-provider.tsx` 和 `repository-composition(.test).ts`。
+
+### 目標架構
+- 資料庫：Neon Postgres（region 選 Singapore `aws-ap-southeast-1`）。用 `pg`（或 `@neondatabase/serverless`），**只在伺服器端連線**，瀏覽器不直連資料庫。
+- 登入：Better Auth，email＋密碼，掛在 Next.js `app/api/auth/[...all]/route.ts`，用同一個 Neon 資料庫存 user／session。
+  - user id 設成產生 UUID（Better Auth 的 `advanced.database.generateId` 設定），這樣現有欄位型別和 `cloud-row-schemas.ts` 的 `z.string().uuid()` 都不用改。
+  - 第一階段**不做 email 驗證信**（`needsEmailConfirmation` 一律 false，`resendSignupConfirmation` 回傳 ok）。正式公開前再接寄信服務，另開工作單。
+- 權限：RLS 改成伺服器端檢查。所有雲端讀寫走 `app/api/cloud/*` route handler，handler 先從 Better Auth 取 session，每一條 SQL 都帶 `where user_id = $sessionUserId`（insert 時 user_id 由伺服器填，不信任前端傳的值）。
+
+### 步驟
+- [x] 0. Neon 連線及本機 Better Auth 環境變數已配置。
+- [x] 1. 從 `feature/camera-brew-runtime` 的 aaa2038 建立 `chore/move-off-supabase`。
+- [x] 2. SQL 合併至 `db/migrations/0001_init.sql`，Better Auth UUID 表由 CLI 產生。已對新 Neon 執行 `npm run db:migrate` 並驗證可重跑。
+- [x] 3. 登入：
+  - `auth-repository.ts` 的型別不再用 `@supabase/supabase-js` 的 Session／User／AuthChangeEvent，改成專案自己的 `AppSession`／`AppUser`／`AuthEvent`（只放畫面真的用到的欄位）。
+  - 新增 `better-auth-repository.ts` 實作同一個 `AuthRepository`；`onAuthStateChange` 用 Better Auth client 的 session 訂閱或自己的 emitter 模擬 SIGNED_IN／SIGNED_OUT。
+  - `auth-errors.ts`：把 Better Auth 錯誤對應到現有的錯誤碼，**畫面文案不改**。
+  - `auth-provider.tsx` 換成新 repository；`profile-bootstrap-service.ts` 的暱稱流程（REQ-39b）行為不變。
+- [x] 4. 以 `app/api/cloud/[resource]` 與前端 `Http*Repository` 提供四個既有介面。保留 revision 樂觀鎖與 `RemoteResult`，執行模式維持 `"local"`。
+- [x] 5. 雙帳號 Neon 整合測試覆蓋六張表，含匿名 401、跨帳號讀寫與刪除隔離、偽造 user_id。
+- [x] 6. 移除 Supabase SDK、CLI 與專案目錄，雲端 repository 移至 `src/infrastructure/cloud/`。更新 `.env.example`。
+- [x] 7. lint、typecheck、build 與 1,001 個測試通過。390×844 的註冊、暱稱確認、登出、登入、搬移與帳號隔離截圖存於 `docs/collab/qa-2026-11/move-off-supabase/`。
+- [ ] 8. push 分支，在 codex-to-claude.md 寫一行（commit、截圖路徑、有沒有任何跟這份不同的決定）。這屬於 auth／schema，Claude 會深度審查；不要 merge。
+
+### 不要做
+- 不要動 Supabase 專案（暫停、刪除、改 schema、刪帳號都不要）。
+- 不要改畫面版面和文案；這張只換底層。
+- 不要開啟雲端執行模式，也不要部署。

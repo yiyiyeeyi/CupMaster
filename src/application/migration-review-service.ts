@@ -1,6 +1,6 @@
 import { createReviewFingerprint, validateLocalCloudMigrationGraph, type LocalCloudMigrationGraph, type MigrationReview, type MigrationReviewSummary, type MigrationReviewWarning } from "@/domain";
 import type { LocalRepositoryBundle } from "@/infrastructure/repositories/repository-composition";
-import { toLibraryStatePayload } from "@/infrastructure/supabase/mappers/library-mappers";
+import { toLibraryStatePayload } from "@/infrastructure/cloud/mappers/library-mappers";
 
 const LEGACY_PREPARATION_TOMBSTONE_AT = "1970-01-01T00:00:00.000Z";
 

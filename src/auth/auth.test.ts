@@ -1,18 +1,16 @@
-import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import type { AuthRepository, AuthStateListener } from "./auth-repository";
-import type { AuthCredentials, AuthResult, AuthState, SignUpOutcome } from "./auth-types";
+import type { AppSession, AppUser, AuthEvent, AuthCredentials, AuthResult, AuthState, SignUpOutcome } from "./auth-types";
 import { AuthService } from "./auth-service";
 import { AuthSessionController } from "./auth-session-controller";
-import { authError, mapSupabaseAuthError } from "./auth-errors";
+import { authError, mapBetterAuthError } from "./auth-errors";
 import { getSafeNextRoute } from "./safe-next-route";
 import { authPageLayoutContract, getMeAuthViewModel, isLocalRoute } from "./auth-view-model";
-import { SupabaseEnvironmentError } from "@/lib/supabase/env";
 
-const user: User = { id: "user-1", aud: "authenticated", role: "authenticated", email: "brewer@example.test", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00.000Z" };
-const session: Session = { access_token: "test-access", refresh_token: "test-refresh", expires_in: 3600, token_type: "bearer", user };
+const user: AppUser = { id: "user-1", email: "brewer@example.test" };
+const session: AppSession = { user };
 class FakeAuthRepository implements AuthRepository {
-  session: Session | null = null; failure: AuthResult<Session | null> | null = null; resendFailure: AuthResult<null> | null = null; listener: AuthStateListener | null = null; subscribeCount = 0; unsubscribeCount = 0; signOutCount = 0; resendCount = 0; lastResendEmail: string | null = null; delaySignIn = false; delayResend = false;
+  session: AppSession | null = null; failure: AuthResult<AppSession | null> | null = null; resendFailure: AuthResult<null> | null = null; listener: AuthStateListener | null = null; subscribeCount = 0; unsubscribeCount = 0; signOutCount = 0; resendCount = 0; lastResendEmail: string | null = null; delaySignIn = false; delayResend = false;
   async getSession() { return this.failure ?? { ok: true as const, value: this.session }; }
   async getUser() { return { ok: true as const, value: this.session?.user ?? null }; }
   async signInWithEmail(credentials: AuthCredentials) { if (this.delaySignIn) await new Promise((resolve) => setTimeout(resolve, 5)); return credentials.email === "bad@example.test" ? { ok: false as const, error: authError("invalid_credentials") } : { ok: true as const, value: session }; }
@@ -21,7 +19,7 @@ class FakeAuthRepository implements AuthRepository {
   async signOut() { this.signOutCount++; return { ok: true as const, value: null }; }
   async refreshSession() { return { ok: true as const, value: this.session }; }
   onAuthStateChange(listener: AuthStateListener) { this.subscribeCount++; this.listener = listener; return () => { this.unsubscribeCount++; }; }
-  emit(value: Session | null, event: AuthChangeEvent = "SIGNED_IN") { this.listener?.(event, value); }
+  emit(value: AppSession | null, event: AuthEvent = "SIGNED_IN") { this.listener?.(event, value); }
 }
 function observe(controller: AuthSessionController) { let latest: AuthState = { status: "loading", user: null, session: null, error: null, notice: null, profileBootstrap: "idle" }; const unsubscribe = controller.subscribe((state) => { latest = state; }); return { latest: () => latest, unsubscribe }; }
 describe("Cloud 2 auth", () => {
@@ -49,7 +47,7 @@ describe("Cloud 2 auth", () => {
   it("no session becomes local", async () => { const repo = new FakeAuthRepository(); const c = new AuthSessionController(() => repo); const o = observe(c); await c.start(); expect(o.latest().status).toBe("local"); });
   it("session becomes authenticated", async () => { const repo = new FakeAuthRepository(); repo.session = session; const c = new AuthSessionController(() => repo); const o = observe(c); await c.start(); expect(o.latest().status).toBe("authenticated"); });
   it("getSession network failure stays a recoverable network error", async () => { const repo = new FakeAuthRepository(); repo.failure = { ok: false, error: authError("network_error") }; const c = new AuthSessionController(() => repo); const o = observe(c); await c.start(); expect(o.latest().error?.code).toBe("network_error"); });
-  it("missing public environment maps to cloud unavailable", async () => { const c = new AuthSessionController(() => { throw new SupabaseEnvironmentError("missing"); }); const o = observe(c); await c.start(); expect(o.latest().error?.code).toBe("cloud_unavailable"); });
+  it("missing public environment maps to cloud unavailable", async () => { const c = new AuthSessionController(() => { return Object.assign(new FakeAuthRepository(), { failure: { ok: false as const, error: authError("cloud_unavailable") } }); }); const o = observe(c); await c.start(); expect(o.latest().error?.code).toBe("cloud_unavailable"); });
   it("missing client factory is recoverable", async () => { const c = new AuthSessionController(() => { throw new Error("env"); }); const o = observe(c); await c.start(); expect(o.latest().error?.code).toBe("session_unavailable"); });
   it("continues locally", () => { const c = new AuthSessionController(() => new FakeAuthRepository()); const o = observe(c); c.continueLocally(); expect(o.latest().status).toBe("local"); });
   it("subscribes once", async () => { const repo = new FakeAuthRepository(); const c = new AuthSessionController(() => repo); await c.start(); await c.start(); expect(repo.subscribeCount).toBe(1); });
@@ -72,9 +70,9 @@ describe("Cloud 2 auth", () => {
   it("prevents duplicate submit", async () => { const repo = new FakeAuthRepository(); repo.delaySignIn = true; const service = new AuthService(repo); const first = service.signIn({ email: "ok@example.test", password: "password" }); const second = await service.signIn({ email: "ok@example.test", password: "password" }); expect(second.ok).toBe(false); await first; });
   it("signs out only through auth repository", async () => { const repo = new FakeAuthRepository(); await new AuthService(repo).signOut(); expect(repo.signOutCount).toBe(1); });
   it("refreshes session", async () => { const repo = new FakeAuthRepository(); repo.session = session; const result = await new AuthService(repo).refreshSession(); expect(result.ok && result.value).toBe(session); });
-  it("maps network failures", () => expect(mapSupabaseAuthError({ message: "Failed to fetch" }).code).toBe("network_error"));
-  it("maps rate limits", () => expect(mapSupabaseAuthError({ status: 429 }).code).toBe("rate_limited"));
-  it("maps email confirmation", () => expect(mapSupabaseAuthError({ message: "Email not confirmed" }).code).toBe("email_not_confirmed"));
+  it("maps network failures", () => expect(mapBetterAuthError({ message: "Failed to fetch" }).code).toBe("network_error"));
+  it("maps rate limits", () => expect(mapBetterAuthError({ status: 429 }).code).toBe("rate_limited"));
+  it("maps email confirmation", () => expect(mapBetterAuthError({ message: "Email not confirmed" }).code).toBe("email_not_confirmed"));
   it("accepts safe next route", () => expect(getSafeNextRoute("/journal/one?tab=brew")).toBe("/journal/one?tab=brew"));
   it.each(["https://evil.test", "//evil.test", "\\evil.test", null])("rejects unsafe next route %s", (value) => expect(getSafeNextRoute(value)).toBe("/me"));
   it("keeps local routes public", () => expect(["/discover", "/brew/one", "/journal", "/me", "/auth"].every(isLocalRoute)).toBe(true));

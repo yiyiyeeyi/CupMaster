@@ -1,28 +1,27 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
-import type { AuthCredentials, AuthResult, AuthState, SignUpCredentials, SignUpOutcome } from "@/auth/auth-types";
+import type { AppSession, AuthCredentials, AuthResult, AuthState, SignUpCredentials, SignUpOutcome } from "@/auth/auth-types";
 import { initialAuthState } from "@/auth/auth-types";
 import { AuthService } from "@/auth/auth-service";
 import { AuthSessionController } from "@/auth/auth-session-controller";
-import { SupabaseAuthRepository } from "@/auth/supabase-auth-repository";
+import { BetterAuthRepository } from "@/auth/better-auth-repository";
 import { ProfileBootstrapService } from "@/auth/profile-bootstrap-service";
 
 type AuthContextValue = AuthState & {
-  signIn(input: AuthCredentials): Promise<AuthResult<Session>>;
+  signIn(input: AuthCredentials): Promise<AuthResult<AppSession>>;
   signUp(input: SignUpCredentials): Promise<AuthResult<SignUpOutcome>>;
   resendSignupConfirmation(email: string): Promise<AuthResult<null>>;
   signOut(): Promise<AuthResult<null>>;
   continueLocally(): void;
-  refreshSession(): Promise<AuthResult<Session | null>>;
+  refreshSession(): Promise<AuthResult<AppSession | null>>;
 };
 const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(initialAuthState);
   const resources = useMemo(() => {
-    let repository: SupabaseAuthRepository | null = null;
+    let repository: BetterAuthRepository | null = null;
     let service: AuthService | null = null;
-    const getRepository = () => repository ??= new SupabaseAuthRepository();
+    const getRepository = () => repository ??= new BetterAuthRepository();
     const getService = () => service ??= new AuthService(getRepository());
     const controller = new AuthSessionController(getRepository, async () => new ProfileBootstrapService().ensureCurrentUserProfile());
     return { getService, controller };

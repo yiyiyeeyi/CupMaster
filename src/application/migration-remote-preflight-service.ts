@@ -2,8 +2,8 @@ import { validateLocalCloudMigrationGraph } from "@/domain/cloud-migration";
 import { classifyProfileMigrationState, sameMigrationEntity, sameParityEntity, toMigrationBaseBrew, type Brew, type SuggestedBrewPlan } from "@/domain";
 import type { StoredUserProfile } from "@/repositories/user-profile-repository";
 import type { LocalRepositoryBundle } from "@/infrastructure/repositories/repository-composition";
-import type { CloudMigrationGateway, GatewayResult } from "@/infrastructure/supabase/cloud-migration-remote-gateway";
-import type { RemoteMigrationRecord } from "@/infrastructure/supabase/remote-repository-contracts";
+import type { CloudMigrationGateway, GatewayResult } from "@/infrastructure/cloud/cloud-migration-remote-gateway";
+import type { RemoteMigrationRecord } from "@/infrastructure/cloud/remote-repository-contracts";
 import type { PreparationSyncRecord } from "@/domain/brew-preparation";
 
 export type PreflightCounts = { missing: number; matching: number; conflict: number; deleted: number; invalid: number };

@@ -1,8 +1,6 @@
-"use client";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import type { OwnerStore } from "./owner-store";
 import type { BeanRecord } from "@/domain/beans";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Database } from "@/types/database.types";
 import type { LibraryStatePayload, PreparationRecord } from "./mappers/library-mappers";
 import { fromBeanRow, fromPreparationRow, fromLibraryStateRow, toBeanRow, toPreparationRow, toLibraryStateRow } from "./mappers/library-mappers";
 import { mapPostgrestError, mapRepositoryException, remoteFailure } from "./repository-errors";
@@ -11,12 +9,11 @@ import type { RemoteParityRepository, RemoteResult } from "./remote-repository-c
 type Versioned<T> = { entity: T; revision: number };
 
 /** Owner-scoped storage for the REQ-37b parity tables. All reads include tombstones for migration. */
-export class SupabaseParityRepository implements RemoteParityRepository {
-  constructor(private readonly client: SupabaseClient<Database> = getSupabaseBrowserClient()) {}
+export class PgParityRepository implements RemoteParityRepository {
+  constructor(private readonly client: OwnerStore) {}
 
   private async userId(): Promise<RemoteResult<string>> {
-    const { data, error } = await this.client.auth.getUser();
-    return error || !data.user ? remoteFailure("unauthenticated", "Sign in is required for cloud persistence.") : { ok: true, value: data.user.id };
+    return { ok: true, value: this.client.userId };
   }
 
   async listBeansForMigration(): Promise<RemoteResult<Array<Versioned<BeanRecord>>>> {
