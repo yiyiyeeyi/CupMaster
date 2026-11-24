@@ -1,17 +1,16 @@
-"use client";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import type { OwnerStore } from "./owner-store";
 import type { SuggestedBrewPlan } from "@/domain";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Database, Tables } from "@/types/database.types";
+import type { Tables } from "@/types/database.types";
 import { fromSuggestedPlanRow, toSuggestedPlanInsert, toSuggestedPlanUpdate } from "./mappers/suggested-plan-mapper";
 import { mapPostgrestError, mapRepositoryException, remoteFailure } from "./repository-errors";
 import type { RemoteMigrationRecord, RemoteResult, RemoteSuggestedPlanRepository } from "./remote-repository-contracts";
 
-export class SupabaseSuggestedPlanRepository implements RemoteSuggestedPlanRepository {
-  constructor(private readonly client: SupabaseClient<Database> = getSupabaseBrowserClient()) {}
-  private async userId(): Promise<RemoteResult<string>> { const { data, error } = await this.client.auth.getUser(); return error || !data.user ? remoteFailure("unauthenticated", "Sign in is required for cloud persistence.") : { ok: true, value: data.user.id }; }
+export class PgSuggestedPlanRepository implements RemoteSuggestedPlanRepository {
+  constructor(private readonly client: OwnerStore) {}
+  private async userId(): Promise<RemoteResult<string>> { return { ok: true, value: this.client.userId }; }
   private mapped(row: Tables<"suggested_plans">): RemoteResult<SuggestedBrewPlan> { try { const mapped = fromSuggestedPlanRow(row); return { ok: true, value: mapped.entity, revision: mapped.revision }; } catch (error) { return mapRepositoryException(error); } }
-  private async rows(query: PromiseLike<{ data: Tables<"suggested_plans">[] | null; error: import("@supabase/supabase-js").PostgrestError | null }>): Promise<RemoteResult<SuggestedBrewPlan[]>> { const { data, error } = await query; if (error) return mapPostgrestError(error); try { return { ok: true, value: (data ?? []).map((row) => fromSuggestedPlanRow(row).entity) }; } catch (cause) { return mapRepositoryException(cause); } }
+  private async rows(query: PromiseLike<{ data: Tables<"suggested_plans">[] | null; error: { code?: string } | null }>): Promise<RemoteResult<SuggestedBrewPlan[]>> { const { data, error } = await query; if (error) return mapPostgrestError(error); try { return { ok: true, value: (data ?? []).map((row) => fromSuggestedPlanRow(row).entity) }; } catch (cause) { return mapRepositoryException(cause); } }
   async create(plan: SuggestedBrewPlan): Promise<RemoteResult<SuggestedBrewPlan>> { const user = await this.userId(); if (!user.ok) return user; const { data, error } = await this.client.from("suggested_plans").insert(toSuggestedPlanInsert(user.value, plan)).select("*").single(); return error ? mapPostgrestError(error) : this.mapped(data); }
   async getById(id: string): Promise<RemoteResult<SuggestedBrewPlan | null>> { const user = await this.userId(); if (!user.ok) return user; const { data, error } = await this.client.from("suggested_plans").select("*").eq("user_id", user.value).eq("id", id).is("deleted_at", null).maybeSingle(); if (error) return mapPostgrestError(error); return data ? this.mapped(data) : { ok: true, value: null }; }
   async getForMigration(id:string):Promise<RemoteResult<RemoteMigrationRecord<SuggestedBrewPlan>>>{const user=await this.userId();if(!user.ok)return user;const{data,error}=await this.client.from("suggested_plans").select("*").eq("user_id",user.value).eq("id",id).maybeSingle();if(error)return mapPostgrestError(error);if(!data)return{ok:true,value:{state:"missing"}};if(data.deleted_at)return{ok:true,value:{state:"deleted",revision:data.revision}};const mapped=this.mapped(data);return mapped.ok?{ok:true,value:{state:"active",entity:mapped.value,revision:mapped.revision??data.revision}}:{ok:true,value:{state:"invalid"}}}

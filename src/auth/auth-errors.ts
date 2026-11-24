@@ -3,4 +3,17 @@ const messages: Record<AuthErrorCode, string> = {
   invalid_email: "Enter a valid email address.", weak_password: "Use a password with at least 8 characters.", password_mismatch: "The passwords do not match.", invalid_credentials: "The email or password is incorrect.", email_not_confirmed: "Confirm your email before signing in.", email_already_registered: "An account may already use this email. Try signing in instead.", rate_limited: "Too many attempts. Wait a moment and try again.", network_error: "Cloud authentication could not be reached. You can keep using CupMaster locally.", cloud_unavailable: "Cloud authentication is not configured. Local mode is still available.", session_unavailable: "The cloud session is unavailable. Local mode is still available.", profile_bootstrap_failed: "Your account is connected, but the cloud profile could not be prepared yet.", confirmation_resend_failed: "The confirmation email could not be resent. Try again shortly.", unknown_auth_error: "Authentication could not be completed. Try again or continue locally.",
 };
 export function authError(code: AuthErrorCode): AuthError { return { code, message: messages[code] }; }
-export function mapSupabaseAuthError(error: { message?: string; status?: number; code?: string } | null): AuthError { const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase(); if (error?.status === 429 || text.includes("rate limit")) return authError("rate_limited"); if (text.includes("email not confirmed")) return authError("email_not_confirmed"); if (text.includes("invalid login") || text.includes("invalid credential")) return authError("invalid_credentials"); if (text.includes("already registered") || text.includes("user already exists")) return authError("email_already_registered"); if (text.includes("weak password") || text.includes("password should")) return authError("weak_password"); if (text.includes("fetch") || text.includes("network") || text.includes("offline")) return authError("network_error"); return authError("unknown_auth_error"); }
+export function mapBetterAuthError(error: { message?: string; status?: number; code?: string }): AuthError {
+  const codes: Record<string, AuthErrorCode> = {
+    CLOUD_UNAVAILABLE: "cloud_unavailable",
+    INVALID_EMAIL: "invalid_email",
+    INVALID_EMAIL_OR_PASSWORD: "invalid_credentials",
+    PASSWORD_TOO_SHORT: "weak_password",
+    USER_ALREADY_EXISTS: "email_already_registered",
+    USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "email_already_registered",
+    EMAIL_NOT_VERIFIED: "email_not_confirmed",
+    FAILED_TO_GET_SESSION: "session_unavailable",
+  };
+  return authError(codes[error.code ?? ""] ?? mapAuthErrorFallback(error).code);
+}
+function mapAuthErrorFallback(error: { message?: string; status?: number; code?: string } | null): AuthError { const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase(); if (error?.status === 429 || text.includes("rate limit")) return authError("rate_limited"); if (text.includes("email not confirmed")) return authError("email_not_confirmed"); if (text.includes("invalid login") || text.includes("invalid credential")) return authError("invalid_credentials"); if (text.includes("already registered") || text.includes("user already exists")) return authError("email_already_registered"); if (text.includes("weak password") || text.includes("password should")) return authError("weak_password"); if (text.includes("fetch") || text.includes("network") || text.includes("offline")) return authError("network_error"); return authError("unknown_auth_error"); }

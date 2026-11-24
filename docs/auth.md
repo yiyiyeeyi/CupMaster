@@ -1,19 +1,14 @@
 # Authentication and Local Mode
 
-Cloud 2 adds optional Supabase email/password authentication without changing the Local MVP data source. `AuthRepository` isolates the SDK, `AuthService` validates and maps errors, `AuthSessionController` owns recovery/subscription, and `AuthProvider` exposes UI state.
+CupMaster uses Better Auth for optional email and password sign-in. Next.js serves auth at `/api/auth/[...all]`. Better Auth stores users and sessions in Neon Postgres. Cloud data requests go to `/api/cloud/*` and derive ownership from the authenticated session. Signing in and signing out leave browser data intact.
 
-The browser client requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Next.js browser bundling requires the complete static references `process.env.NEXT_PUBLIC_SUPABASE_URL` and `process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; passing the whole `process.env` object or using dynamic lookup is unsupported. Missing configuration produces a recoverable unavailable state while Local Mode continues.
+## Local setup
 
-Statuses are `loading`, `local`, `authenticated`, and recoverable `error`. Initial client load restores with `getSession()` and exactly one `onAuthStateChange` listener; cleanup unsubscribes. Missing environment or network failure never blocks local routes.
+1. Set `DATABASE_URL` to the Neon Postgres connection string in `.env.local`.
+2. Set `BETTER_AUTH_SECRET` to a random secret of at least 32 bytes and set `BETTER_AUTH_URL=http://localhost:3000`.
+3. Run `npm run db:migrate`. The initial SQL creates UUID auth tables and all six cloud data tables. The migration runner applies each file once and checks checksums on later runs.
+4. Run `npm run dev` and open `/auth`. Signup uses the entered nickname and requires confirmation on the following screen. This phase creates an authenticated session immediately and email verification is deferred.
 
-Signing in does not upload LocalStorage. Signing out clears only the Supabase session and never clears CupMaster storage. Onboarding, Brew, Journal, Profile, and Suggested Plans remain local. Cloud 4 is reserved for explicit migration and Cloud 5 for synchronization/conflicts.
+Credentials stay on the server. The cloud client forwards only authenticated same-origin requests. The account header detects an account switch in another tab. It never determines SQL ownership. Local Mode stays active even after copying data to the account from `/migration`.
 
-After authentication, a narrow bootstrap service reads the current Auth user and ensures a minimal `public.profiles` row. It accepts no user id parameter and relies on RLS. Defaults are email local-part (or `Coffee Brewer`), beginner, no needs, and incomplete onboarding. Local onboarding is not copied.
-
-Not implemented: OAuth, account deletion, complete password reset, remote repositories, migration, synchronization, Realtime, or real AI.
-
-## Signup confirmation state
-
-Signup without a session enters a transient `confirmation_sent` UI. It states that the account was created, displays only the submitted email, and removes password fields from state. Back to Sign in and Change email preserve the email while restoring empty password fields. Refresh may return to the normal Auth page; this UI state is never persisted or placed in a URL.
-
-Resend confirmation uses `supabase.auth.resend({ type: "signup", email })`. Loading prevents duplicate requests; accepted, rate-limited, network, and safe unknown-error states remain on the confirmation screen. Continue locally remains available. Authentication still does not mean synchronization, and Cloud 3 has not started.
+To verify account isolation end to end, set `CUPMASTER_AUTH_TEST_URL=http://localhost:3000` with a local server running against a test Neon database and run `npm test -- src/infrastructure/cloud/cloud-isolation.integration.test.ts`. This creates two synthetic accounts and sample rows.

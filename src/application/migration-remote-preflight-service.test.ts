@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LocalRepositoryBundle } from "@/infrastructure/repositories/repository-composition";
-import type { CloudMigrationGateway } from "@/infrastructure/supabase/cloud-migration-remote-gateway";
+import type { CloudMigrationGateway } from "@/infrastructure/cloud/cloud-migration-remote-gateway";
 import { LocalUserProfileRepository } from "@/repositories/local-user-profile-repository";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";

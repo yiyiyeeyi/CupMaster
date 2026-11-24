@@ -1,6 +1,8 @@
+import type { RemoteBrewRepository, RemoteParityRepository, RemoteSuggestedPlanRepository, RemoteUserProfileRepository } from "@/infrastructure/cloud/remote-repository-contracts";
+import { BetterAuthRepository } from "@/auth/better-auth-repository";
+import type { AuthRepository } from "@/auth/auth-repository";
+import { cloudCall, HttpUserProfileRepository, HttpBrewRepository, HttpSuggestedPlanRepository, HttpParityRepository } from "@/infrastructure/cloud/http-repositories";
 import { LocalBeanRepository } from "@/repositories/local-bean-repository";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database.types";
 import type { UserProfileRepository } from "@/repositories/user-profile-repository";
 import type { BrewRepository } from "@/repositories/brew-repository";
 import type { SuggestedPlanRepository } from "@/repositories/suggested-plan-repository";
@@ -9,12 +11,6 @@ import { LocalUserProfileRepository } from "@/repositories/local-user-profile-re
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalSuggestedPlanRepository } from "@/repositories/local-suggested-plan-repository";
 import { MockRecipeRepository } from "@/repositories/mock-recipe-repository";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { RemoteBrewRepository, RemoteParityRepository, RemoteSuggestedPlanRepository, RemoteUserProfileRepository } from "@/infrastructure/supabase/remote-repository-contracts";
-import { SupabaseUserProfileRepository } from "@/infrastructure/supabase/supabase-user-profile-repository";
-import { SupabaseBrewRepository } from "@/infrastructure/supabase/supabase-brew-repository";
-import { SupabaseSuggestedPlanRepository } from "@/infrastructure/supabase/supabase-suggested-plan-repository";
-import { SupabaseParityRepository } from "@/infrastructure/supabase/supabase-parity-repository";
 import { LocalBrewPreparationRepository } from "@/repositories/local-brew-preparation-repository";
 
 export type RepositoryMode = "local" | "remote";
@@ -31,18 +27,20 @@ export type MigrationBundleResult = { ok: true; value: MigrationRepositoryBundle
 export function createLocalRepositoryBundle(): LocalRepositoryBundle { return { beanRepository:new LocalBeanRepository(), preparationRepository:new LocalBrewPreparationRepository(), userProfileRepository: new LocalUserProfileRepository(), brewRepository: new LocalBrewRepository(), suggestedPlanRepository: new LocalSuggestedPlanRepository(), recipeRepository: new MockRecipeRepository() }; }
 export function getRuntimeRepositoryBundle(): LocalRepositoryBundle { return createLocalRepositoryBundle(); }
 
-type ClientFactory = () => SupabaseClient<Database>;
-export async function createAuthenticatedRemoteRepositoryBundle(getClient: ClientFactory = getSupabaseBrowserClient): Promise<RemoteBundleResult> {
-  let client: SupabaseClient<Database>;
+type ClientFactory = () => Pick<AuthRepository, "getUser">;
+const getAuth = () => new BetterAuthRepository();
+export async function createAuthenticatedRemoteRepositoryBundle(getClient: ClientFactory = getAuth): Promise<RemoteBundleResult> {
+  let client: ReturnType<ClientFactory>;
   try { client = getClient(); } catch { return { ok: false, code: "migration_unavailable", message: "Cloud repositories are unavailable. Local Mode remains active." }; }
   try {
-    const { data, error } = await client.auth.getUser();
-    if (error || !data.user) return { ok: false, code: "unauthenticated", message: "Sign in is required before cloud migration can be prepared." };
-    return { ok: true, authenticatedUserId: data.user.id, value: { userProfileRepository: new SupabaseUserProfileRepository(client), brewRepository: new SupabaseBrewRepository(client), suggestedPlanRepository: new SupabaseSuggestedPlanRepository(client), parityRepository: new SupabaseParityRepository(client) } };
+    const current = await client.getUser();
+    if (!current.ok || !current.value) return { ok: false, code: "unauthenticated", message: "Sign in is required before cloud migration can be prepared." };
+    const call = cloudCall(current.value.id);
+    return { ok: true, authenticatedUserId: current.value.id, value: { userProfileRepository: new HttpUserProfileRepository(call), brewRepository: new HttpBrewRepository(call), suggestedPlanRepository: new HttpSuggestedPlanRepository(call), parityRepository: new HttpParityRepository(call) } };
   } catch { return { ok: false, code: "migration_unavailable", message: "Cloud repositories are unavailable. Local Mode remains active." }; }
 }
 
-export async function createMigrationRepositoryBundle(getClient: ClientFactory = getSupabaseBrowserClient): Promise<MigrationBundleResult> {
+export async function createMigrationRepositoryBundle(getClient: ClientFactory = getAuth): Promise<MigrationBundleResult> {
   const remote = await createAuthenticatedRemoteRepositoryBundle(getClient);
   if (!remote.ok) return remote;
   const profile = await remote.value.userProfileRepository.load();

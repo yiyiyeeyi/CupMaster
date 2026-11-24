@@ -2,7 +2,7 @@
 
 > 這份文件是 repo 內的**產品決策依據**。所有開發者（人或 AI：Codex、Claude）開工前都要讀。
 > 完整 PRD、需求清單與狀態在 Notion；本檔是其中「已定案、會影響實作」的摘要，離線也能查。
-> 最後更新：2026-10-28
+> 最後更新：2026-11-25
 
 ## 1. 依據的優先順序
 
@@ -92,6 +92,7 @@ V1 成功標準：
 
 | 日期 | 決策 | 要點 |
 |---|---|---|
+| 2026-11-25 | CupMaster 雲端底層改用 Neon 與 Better Auth | Neon 採 Singapore 區域。登入維持 email＋密碼與暱稱確認，第一階段暫不寄驗證信。雲端搬移由伺服器以登入帳號隔離資料。執行模式仍為 Local Mode，Supabase 專案由使用者驗收後自行處理 |
 | 2026-10-28 | 批次 4 REQ-37b 本機 parity | 使用者授權依序 A→D；每步 push 後深度審查通知；SQL 只能套本機 Supabase，E 必停。未經 Claude 審 SQL 與 yiyi 另行明確允許，不得套用雲端 ouniwzdxbcrektzynkak；不 merge、不部署，持續雙向同步不在本批 |
 | 2026-10-28 | 批次 3：這一杯與五星回饋 | 使用者選 A：共用這一杯兩狀態；新回饋必填1–5星，overallImpression選填且舊值不換算；aroma／tasteTags選填，舊balance／flavorNotes保留；可只儲存，分析沿用本機規則；同豆子星等比較，無資料不顯示；TDS暫只放說明文字，不改雲端 |
 | 2026-10-27 | 批次 2 本機 Collection／Bean Detail 與刻度格式 | 使用者定案：刻度依型號 single／compound／number；新增全選填 Bean 庫與每杯快照；舊豆子匯入需確認。Collection 只做豆子／方案，實頁完成後加入第五格導覽。Bean Detail 不放無來源星等／AI；不改 SQL／雲端，不強迫選 Bean |

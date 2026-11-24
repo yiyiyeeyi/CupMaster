@@ -1,17 +1,16 @@
-"use client";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
+import type { OwnerStore } from "./owner-store";
 import type { UserProfile } from "@/domain";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Database, Tables } from "@/types/database.types";
+import type { Tables } from "@/types/database.types";
 import type { Json } from "@/types/database.types";
 import type { OnboardingDraft, StoredUserProfile } from "@/repositories/user-profile-repository";
 import { fromProfileRow, toProfileInsert } from "./mappers/profile-mapper";
 import { mapPostgrestError, mapRepositoryException, remoteFailure } from "./repository-errors";
 import type { RemoteMigrationRecord, RemoteResult, RemoteUserProfileRepository } from "./remote-repository-contracts";
 
-export class SupabaseUserProfileRepository implements RemoteUserProfileRepository {
-  constructor(private readonly client: SupabaseClient<Database> = getSupabaseBrowserClient()) {}
-  private async userId(): Promise<RemoteResult<string>> { const { data, error } = await this.client.auth.getUser(); return error || !data.user ? remoteFailure("unauthenticated", "Sign in is required for cloud persistence.") : { ok: true, value: data.user.id }; }
+export class PgUserProfileRepository implements RemoteUserProfileRepository {
+  constructor(private readonly client: OwnerStore) {}
+  private async userId(): Promise<RemoteResult<string>> { return { ok: true, value: this.client.userId }; }
   private mapped(row: Tables<"profiles">): RemoteResult<StoredUserProfile> { try { const value = fromProfileRow(row); return { ok: true, value: { profile: value.entity, selectedNeeds: value.entity.currentNeeds, onboardingCompleted: value.onboardingCompleted, preferences: value.preferences }, revision: value.revision }; } catch (error) { return mapRepositoryException(error); } }
   async load(): Promise<RemoteResult<StoredUserProfile | null>> { const user = await this.userId(); if (!user.ok) return user; const { data, error } = await this.client.from("profiles").select("*").eq("id", user.value).is("deleted_at", null).maybeSingle(); if (error) return mapPostgrestError(error); return data ? this.mapped(data) : { ok: true, value: null }; }
   async getForMigration():Promise<RemoteResult<RemoteMigrationRecord<StoredUserProfile>>>{const user=await this.userId();if(!user.ok)return user;const{data,error}=await this.client.from("profiles").select("*").eq("id",user.value).maybeSingle();if(error)return mapPostgrestError(error);if(!data)return{ok:true,value:{state:"missing"}};if(data.deleted_at)return{ok:true,value:{state:"deleted",revision:data.revision}};const mapped=this.mapped(data);return mapped.ok?{ok:true,value:{state:"active",entity:mapped.value,revision:mapped.revision??data.revision}}:{ok:true,value:{state:"invalid"}}}

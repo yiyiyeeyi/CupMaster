@@ -25,7 +25,24 @@ export function toMigrationBaseBrew(local:Brew):Brew{return local.sourceSuggeste
 export function buildBrewReferencePatch(local:Brew,remote:Brew):Brew{return{...structuredClone(remote),sourceType:local.sourceType,sourceSuggestedPlanId:local.sourceSuggestedPlanId,sourceBrewId:local.sourceBrewId,sourceAnalysisId:local.sourceAnalysisId,sourceRecommendationId:local.sourceRecommendationId,sourceFingerprint:local.sourceFingerprint,suggestedPlanHandoff:local.suggestedPlanHandoff?structuredClone(local.suggestedPlanHandoff):null}}
 const profileContent=(stored:StoredUserProfile)=>({displayName:stored.profile.displayName,experienceLevel:stored.profile.experienceLevel,currentNeeds:[...stored.profile.currentNeeds].sort(),onboardingCompleted:stored.onboardingCompleted});
 export type ProfileMigrationState="missing_remote"|"bootstrap"|"matching"|"profile_conflict";
-export function classifyProfileMigrationState(local:StoredUserProfile,remote:StoredUserProfile|null):ProfileMigrationState{if(!remote)return"missing_remote";if(stable(profileContent(local))===stable(profileContent(remote)))return"matching";const bootstrap=!remote.onboardingCompleted&&remote.profile.experienceLevel==="beginner"&&remote.selectedNeeds.length===0&&remote.profile.currentNeeds.length===0&&remote.profile.displayName==="Coffee Brewer";return bootstrap?"bootstrap":"profile_conflict"}
+export function hasConfirmedCloudNickname(profile: StoredUserProfile): boolean {
+  const preferences = profile.preferences;
+  return Boolean(preferences && typeof preferences === "object" && !Array.isArray(preferences) && preferences.displayNameConfirmed === true);
+}
+export function classifyProfileMigrationState(local: StoredUserProfile, remote: StoredUserProfile | null): ProfileMigrationState {
+  if (!remote) return "missing_remote";
+  const confirmedNickname = hasConfirmedCloudNickname(remote);
+  const localContent = profileContent(local);
+  const remoteContent = profileContent(remote);
+  if (confirmedNickname) localContent.displayName = remoteContent.displayName;
+  if (stable(localContent) === stable(remoteContent)) return "matching";
+  const preferences = remote.preferences;
+  const unsetExperience = preferences && typeof preferences === "object" && !Array.isArray(preferences) && preferences.experienceLevelSource === "unset";
+  const emptyProfile = !remote.onboardingCompleted && remote.profile.experienceLevel === "beginner"
+    && remote.selectedNeeds.length === 0 && remote.profile.currentNeeds.length === 0;
+  const bootstrap = emptyProfile && (remote.profile.displayName === "Coffee Brewer" || (confirmedNickname && unsetExperience));
+  return bootstrap ? "bootstrap" : "profile_conflict";
+}
 const withoutDatabaseMetadata=(value:unknown)=>value&&typeof value==="object"&&!Array.isArray(value)?Object.fromEntries(Object.entries(value as Record<string,unknown>).filter(([key])=>key!=="updatedAt"&&key!=="revision"&&key!=="deletedAt")):value;
 export function sameMigrationEntity<T>(local:T,remote:T){return stable(withoutDatabaseMetadata(local))===stable(withoutDatabaseMetadata(remote))}
 export function sameParityEntity<T>(local:T,remote:T){const strip=(value:unknown):unknown=>value&&typeof value==="object"&&!Array.isArray(value)?Object.fromEntries(Object.entries(value as Record<string,unknown>).filter(([key])=>key!=="updatedAt"&&key!=="revision").map(([key,item])=>[key,strip(item)])):Array.isArray(value)?value.map(strip):value;return stable(strip(local))===stable(strip(remote))}

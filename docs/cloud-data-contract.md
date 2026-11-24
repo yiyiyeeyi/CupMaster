@@ -1,6 +1,6 @@
 # Cloud data contract
 
-Cloud 3-2 separates `authMode` from `repositoryMode`. Authentication never selects remote storage: runtime is fixed to Local and does not inspect environment, session, URL, or development flags. Authenticated Remote and Migration bundles are dependency assembly only; they do not read LocalStorage, query application tables, write Supabase, or create checkpoints.
+Cloud 3-2 separates `authMode` from `repositoryMode`. Authentication never selects remote storage: runtime is fixed to Local and does not inspect environment, session, URL, or development flags. Authenticated Remote and Migration bundles are dependency assembly only; they do not read LocalStorage, query application tables, write cloud records, or create checkpoints.
 
 Cloud 4-2 writes only through the authenticated migration bundle after fingerprint-bound consent. Local IDs are Remote IDs. Suggested-plan Brews use a temporary base projection followed by revision-aware reference patching. Insert success is not completion until mapper round-trip and graph verification pass.
 
@@ -8,7 +8,7 @@ The checkpoint, deterministic graph validator, logical import order, and entity-
 
 Cloud 2 adds optional Auth and a minimal profile bootstrap only. Authentication is not synchronization: LocalStorage remains the runtime source and no local record is uploaded, replaced, or deleted. Explicit migration is reserved for Cloud 4 and ongoing synchronization for Cloud 5.
 
-Browser and cookie-aware clients use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; no secret or service-role credential belongs in this contract.
+The browser calls the same-origin cloud API. Each operation resolves a Better Auth session and scopes PostgreSQL reads and writes to the owner. Database credentials stay on the server.
 
 Cloud 1 defines a PostgreSQL boundary for Profile, Brew, and Suggested Plan while the LocalStorage repositories remain the only runtime source. No local record has been uploaded, rewritten, or assigned a new ID.
 
@@ -26,9 +26,9 @@ Database IDs are text for Brew and Plan and are preserved byte-for-byte. The dat
 
 ## Cloud 3-1 remote repository infrastructure
 
-Inactive Supabase implementations cover the current Profile, Brew, and Suggested Plan method sets. Existing Local interfaces remain synchronous because LocalStorage is the active runtime source; remote mirror contracts are async because Supabase JS is network-bound. No provider, service, page, component, or route imports these implementations.
+HTTP repositories implement the remote Profile, Brew, Suggested Plan, and parity contracts for the explicit migration flow. Next.js validates the request, verifies the session, and invokes PostgreSQL repositories scoped to that session. LocalStorage remains the runtime source.
 
-Ownership comes from the authenticated client, never a caller user ID. Creates start at revision 1. `updateIfRevision(entity, expectedRevision)` writes revision `expectedRevision + 1` only when owner, id, expected revision, and active-row filters match. Zero rows return `revision_conflict`; deletes are soft deletes with the same guard.
+Ownership comes from the server-verified session. Creates start at revision 1. `updateIfRevision(entity, expectedRevision)` writes revision `expectedRevision + 1` only when owner, id, expected revision, and active-row filters match. Zero rows return `revision_conflict`. Deletes are soft deletes with the same guard.
 
 Errors normalize to `unauthenticated`, `not_found`, `revision_conflict`, `permission_denied`, `invalid_data`, or `persistence_failed`. Cloud 3-1 excludes runtime selection, migration, sync, retries, offline queues, and conflict UI.
 
@@ -51,4 +51,4 @@ Cloud 1 does not execute this migration, implement sync, or resolve conflicts.
 
 ## Type status
 
-`src/types/database.types.ts` is a checked-in **provisional** contract mirrored from the migration, not output from a remote schema. After an approved push, regenerate it with Supabase CLI and review the diff before remote repositories are implemented.
+`src/types/database.types.ts` is the checked-in row contract mirrored from the initial PostgreSQL migration. Row mappers validate database responses before returning domain entities.
