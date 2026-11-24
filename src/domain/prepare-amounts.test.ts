@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { changePrepareAmount, isRatioChanged, restorePrepareAmounts, type PrepareAmounts } from "./prepare-amounts";
+import { amountRatio, changePrepareAmount, isRatioChanged, restorePrepareAmounts, type PrepareAmounts } from "./prepare-amounts";
 const original: PrepareAmounts = { dose:20,water:300,doseFixed:false,waterFixed:false };
 describe("Quick Prepare amount linkage",()=>{
+  it("rounds linked dose when water increases by 10 g", () => {
+    const next = changePrepareAmount({ ...original, dose: 15, water: 240 }, "water", 250);
+    expect(next).toMatchObject({ dose: 15.6, water: 250 });
+    expect(amountRatio(next)?.toFixed(2)).toBe("16.03");
+  });
+  it("leaves pinned dose intact when water increases by 10 g", () => {
+    const next = changePrepareAmount({ ...original, dose: 15, water: 240, doseFixed: true }, "water", 250);
+    expect(next).toMatchObject({ dose: 15, water: 250 });
+    expect(isRatioChanged(next, { dose: 15, water: 240 })).toBe(true);
+  });
+  it("uses the changed ratio and rounds linked water to whole grams", () => {
+    const changed = changePrepareAmount({ ...original, waterFixed: true }, "dose", 18);
+    const next = changePrepareAmount({ ...changed, waterFixed: false }, "dose", 20);
+    expect(next).toMatchObject({ dose: 20, water: 333 });
+    expect(amountRatio(next)).toBe(16.65);
+  });
   it.each([
     [false,false,"dose",25,25,375], [false,false,"water",450,30,450],
     [true,false,"water",400,20,400], [false,true,"dose",25,25,300],

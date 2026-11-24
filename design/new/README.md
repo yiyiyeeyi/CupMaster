@@ -1,6 +1,6 @@
 # CupMaster 新版 UI（design/new）
 
-2026-10-26 由 yiyi 與 Claude 定稿的新版介面（設計稿版本 v17）。
+2026-10-26 由 yiyi 與 Claude 定稿的新版介面（設計稿版本 v17）。2026-11-06 v18：Quick Prepare `03`／`03b`／`03c` 改成濾杯粉水圖＋‹ 磨豆機 ›＋研磨滑尺、新勾勾框。
 Claude 負責視覺／UI，Codex 負責邏輯／資料，兩邊都以這個資料夾為準。
 
 ## 跟舊圖的關係
@@ -28,7 +28,7 @@ Claude 負責視覺／UI，Codex 負責邏輯／資料，兩邊都以這個資�
 | 01 | Discover | `01-discover.png` |
 | 02 | Recipe Detail | `02-recipe-detail.png` |
 | 03 | Quick Prepare | `03-quick-prepare.png`、`03b`（展開更多）、`03c`（粉水比已改） |
-| 03d–f | Quick Prepare 的小選單 | 磨豆機、格數、器具 |
+| 03d–f | Quick Prepare 的小選單 | 磨豆機、器具（`03e` 格數滾輪 v18 起停用，改滑尺） |
 | 04 | Live Brew | 注水、悶蒸等待、等濾乾、換水溫、右上選單、不開鏡頭 |
 | 05 | Brew Summary（這一杯：剛沖完、還沒評分） | `05-brew-summary.png` |
 | 06 | Flavor Feedback | `06-flavor-feedback.png` |

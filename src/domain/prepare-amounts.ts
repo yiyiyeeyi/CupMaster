@@ -7,8 +7,8 @@ export function changePrepareAmount(current: PrepareAmounts, field: "dose" | "wa
   const ratio = amountRatio(current);
   if (!Number.isFinite(value) || value <= 0 || ratio === null) return current;
   const next = { ...current, [field]: value };
-  if (field === "dose" && !current.waterFixed) next.water = Math.round(value * ratio * 100) / 100;
-  if (field === "water" && !current.doseFixed) next.dose = Math.round(value / ratio * 100) / 100;
+  if (field === "dose" && !current.waterFixed) next.water = Math.round(value * ratio);
+  if (field === "water" && !current.doseFixed) next.dose = Math.round(value / ratio * 10) / 10;
   return next;
 }
 export function restorePrepareAmounts(current: PrepareAmounts, recipe: Pick<PrepareAmounts,"dose" | "water">): PrepareAmounts {

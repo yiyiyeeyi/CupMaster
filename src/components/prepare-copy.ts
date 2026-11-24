@@ -8,4 +8,5 @@ export const prepareCopy = {
   customName:"名稱", add:"新增", close:"完成", empty:"沒有符合的選項", optional:"選填", choose:"選擇",
   equipmentNotes:"器材備註（選填）", goal:"這杯想要（選填）", chooseMethod:"沿用配方",
   customValue:"自行輸入", micron:"約略粗細", converted:"自動換算", invalidName:"請填寫名稱（最多 80 個字）。",
+  slideToSet:"左右滑動設定格數", recipeGrind:"配方：", recipeOriginal:"配方原本的設定",
 } as const;
