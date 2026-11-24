@@ -424,3 +424,10 @@ yiyi 2026-11-25 決定 CupMaster 搬離 Supabase（免費版只能同時開 2 �
 - 不要動 Supabase 專案（暫停、刪除、改 schema、刪帳號都不要）。
 - 不要改畫面版面和文案；這張只換底層。
 - 不要開啟雲端執行模式，也不要部署。
+
+### Claude 審查結果（2026-11-25，1c1fd5a／a8842e3）：通過
+
+- 所有權：`OwnerStore` 每條查詢都先帶 `owner = $1`（session 帳號），insert 由伺服器填 owner、update 不能改 owner；`/api/cloud` 只認 Better Auth session，`x-cupmaster-account` 只當過期請求防護。符合工單。
+- revision、`server-only`、`.env.local` 不入 git、`RUNTIME_REPOSITORY_MODE` 仍為 local，都確認。
+- 小問題（不擋合併，之後順手改）：`brews`、`suggested_plans` 的 `id` 是全域主鍵，B 若用到 A 已有的 id 會撞主鍵而回 `persistence_failed`，等於能探測別人的 id 是否存在。本機 id 是隨機產生，風險低；下次動 schema 時改成 `(user_id, id)` 複合主鍵，和 beans 一致。
+- 下一步由 yiyi 決定合併回 `feature/camera-brew-runtime`；Supabase CupMaster 專案在合併後再暫停。
