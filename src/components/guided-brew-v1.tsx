@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { Brew, RecipeStep } from "@/domain";
 import { createPourPathPlaybackProps, formatDuration } from "@/domain";
 import { BrewRuntimeController } from "@/application/brew-runtime/brew-runtime-controller";
@@ -12,6 +12,7 @@ import { BrewService } from "@/application/brew-service";
 import { BrewInterruptionService } from "@/application/brew-interruption-service";
 import { createBrewRuntimeRecipeDefinition, type NormalizedRect } from "@/domain/brew-runtime";
 import { CameraCaptureService, FrameAnalysisService, FrameSampler, type CameraCaptureSnapshot } from "@/infrastructure/camera";
+import { previewRectToFrameRoi } from "@/infrastructure/camera/camera-preview-geometry";
 import { isWebVoiceStartSupported, WebGuidanceVoiceAdapter, WebVoiceStartAdapter } from "@/infrastructure/voice";
 import { LocalBrewRepository } from "@/repositories/local-brew-repository";
 import { LocalLiveBrewRepository } from "@/repositories/local-live-brew-repository";
@@ -21,8 +22,10 @@ import { LiveBrewHud } from "./live-brew-hud";
 import { PourPathGuide } from "./pour-path-guide";
 import { brewSheetCopy as sheetCopy } from "./brew-sheet-copy";
 import { guidedBrewCopy as copy } from "./guided-brew-copy";
+import "./guided-brew-camera.css";
 
 const DRIPPER_REGION: Readonly<NormalizedRect> = { x: 0.2, y: 0.22, width: 0.6, height: 0.5 };
+type DripperRegionDrag = { mode: "move" | "resize"; pointerId: number; startX: number; startY: number; startRegion: NormalizedRect };
 
 function executionNow() {
   // Wall time includes device sleep; camera coordinates keep their own contract.
@@ -64,6 +67,10 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [overrun, setOverrun] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraPreviewRef = useRef<HTMLDivElement>(null);
+  const dripperRegionRef = useRef<NormalizedRect>({ ...DRIPPER_REGION });
+  const regionDragRef = useRef<DripperRegionDrag | null>(null);
+  const [dripperRegion, setDripperRegion] = useState<NormalizedRect>(() => ({ ...DRIPPER_REGION }));
   const samplerRef = useRef<FrameSampler | null>(null);
   const samplerUnsubscribeRef = useRef<(() => void) | null>(null);
   const cameraRequestRef = useRef(0);
@@ -95,6 +102,82 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
   });
   const [snapshot, setSnapshot] = useState(() => session.getSnapshot());
   const [cameraSnapshot, setCameraSnapshot] = useState(() => camera.getSnapshot());
+
+  const updateAnalyzerRoi = useCallback((region: NormalizedRect = dripperRegionRef.current) => {
+    const video = videoRef.current;
+    const preview = cameraPreviewRef.current;
+    if (!video || !preview) return;
+    const roi = previewRectToFrameRoi(region, video.videoWidth, video.videoHeight, preview.clientWidth, preview.clientHeight);
+    if (roi) analyzer.setRoi(roi);
+  }, [analyzer]);
+
+  function updateDripperRegion(next: NormalizedRect) {
+    const width = Math.min(1, Math.max(0.2, next.width));
+    const height = Math.min(1, Math.max(0.2, next.height));
+    const region = {
+      x: Math.min(1 - width, Math.max(0, next.x)),
+      y: Math.min(1 - height, Math.max(0, next.y)),
+      width,
+      height,
+    };
+    dripperRegionRef.current = region;
+    setDripperRegion(region);
+    updateAnalyzerRoi(region);
+  }
+
+  function beginRegionDrag(mode: DripperRegionDrag["mode"], event: ReactPointerEvent<HTMLDivElement>) {
+    if (snapshot.phase === "BREWING" || snapshot.phase === "COMPLETED" || cameraSnapshot.state !== "ready") return;
+    const preview = cameraPreviewRef.current;
+    if (!preview) return;
+    event.preventDefault();
+    preview.setPointerCapture(event.pointerId);
+    regionDragRef.current = {
+      mode,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRegion: { ...dripperRegionRef.current },
+    };
+  }
+
+  function moveRegionDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = regionDragRef.current;
+    const preview = cameraPreviewRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !preview) return;
+    const bounds = preview.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const dx = (event.clientX - drag.startX) / bounds.width;
+    const dy = (event.clientY - drag.startY) / bounds.height;
+    const start = drag.startRegion;
+    updateDripperRegion(drag.mode === "move"
+      ? { ...start, x: start.x + dx, y: start.y + dy }
+      : { ...start, width: start.width + dx, height: start.height + dy });
+  }
+
+  function endRegionDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (regionDragRef.current?.pointerId !== event.pointerId) return;
+    regionDragRef.current = null;
+    const preview = cameraPreviewRef.current;
+    if (preview?.hasPointerCapture(event.pointerId)) preview.releasePointerCapture(event.pointerId);
+  }
+
+  function nudgeDripperRegion(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (cameraSnapshot.state !== "ready" || snapshot.phase === "BREWING" || snapshot.phase === "COMPLETED") return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const step = event.shiftKey ? 0.05 : 0.01;
+    if (target.closest(".guided-region-resize")) {
+      const width = dripperRegionRef.current.width + (event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0);
+      const height = dripperRegionRef.current.height + (event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0);
+      updateDripperRegion({ ...dripperRegionRef.current, width, height });
+      return;
+    }
+    const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+    const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+    updateDripperRegion({ ...dripperRegionRef.current, x: dripperRegionRef.current.x + dx, y: dripperRegionRef.current.y + dy });
+  }
 
   const startGuidedBrew = useCallback((source: GuidedBrewStartSource) => {
     const current = session.getSnapshot();
@@ -153,6 +236,7 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
     try {
       await camera.attachToVideo(videoRef.current);
       if (request !== cameraRequestRef.current || videoRef.current === null) return;
+      updateAnalyzerRoi();
       session.selectMode("camera");
       setNotice(null);
       const sampler = new FrameSampler(videoRef.current, { targetFps: 10 });
@@ -172,7 +256,23 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
       session.selectMode("timer_voice");
       setNotice(copy.previewFailed);
     }
-  }, [analyzer, camera, session, stopCamera]);
+  }, [analyzer, camera, session, stopCamera, updateAnalyzerRoi]);
+
+  useEffect(() => {
+    const preview = cameraPreviewRef.current;
+    const video = videoRef.current;
+    if (!preview || !video || typeof ResizeObserver === "undefined") return;
+    const syncRoi = () => updateAnalyzerRoi();
+    const observer = new ResizeObserver(syncRoi);
+    observer.observe(preview);
+    video.addEventListener("loadedmetadata", syncRoi);
+    video.addEventListener("resize", syncRoi);
+    return () => {
+      observer.disconnect();
+      video.removeEventListener("loadedmetadata", syncRoi);
+      video.removeEventListener("resize", syncRoi);
+    };
+  }, [updateAnalyzerRoi]);
 
   useEffect(() => {
     session.activate();
@@ -322,12 +422,20 @@ export function GuidedBrewV1({ brew }: { brew: Brew }) {
 
       <section className="guided-camera-card" aria-labelledby="guided-camera-heading">
         <div className="section-heading"><div><p className="eyebrow">{withoutCamera ? copy.timerVoiceLabel : copy.cameraLabel}</p><h2 id="guided-camera-heading">{withoutCamera ? copy.timerVoiceHeading : copy.cameraHeading}</h2></div><strong>{cameraSnapshot.state}</strong></div>
-        <div className="guided-camera-preview">
+        <div ref={cameraPreviewRef} className="guided-camera-preview" onPointerMove={moveRegionDrag} onPointerUp={endRegionDrag} onPointerCancel={endRegionDrag}>
           <video ref={videoRef} aria-label="Live rear camera preview" />
-          {!withoutCamera ? <div className={`guided-dripper-region guided-dripper-region-${snapshot.phase.toLowerCase()}`} aria-hidden="true" /> : null}
+          {!withoutCamera ? <div
+            className={`guided-dripper-region guided-dripper-region-${snapshot.phase.toLowerCase()}`}
+            role="group"
+            tabIndex={cameraSnapshot.state === "ready" && isSetup ? 0 : -1}
+            aria-label={copy.adjustDripperRegion}
+            onKeyDown={nudgeDripperRegion}
+            onPointerDown={(event) => beginRegionDrag(event.target instanceof HTMLElement && event.target.closest("button") ? "resize" : "move", event)}
+            style={{ left: `${dripperRegion.x * 100}%`, top: `${dripperRegion.y * 100}%`, width: `${dripperRegion.width * 100}%`, height: `${dripperRegion.height * 100}%` }}
+          >{cameraSnapshot.state === "ready" && isSetup ? <button className="guided-region-resize" type="button" aria-label={copy.resizeDripperRegion} onClick={(event) => event.preventDefault()}>↘</button> : null}</div> : null}
           <span className="guided-camera-state">{withoutCamera ? copy.timerVoiceLabel : snapshot.phase}</span>
         </div>
-        <p className="guided-position-copy" role="status"><strong>{withoutCamera ? copy.timerVoiceDescription : statusCopy}</strong><span>{cameraMessage(cameraSnapshot)}</span></p>
+        <p className="guided-position-copy" role="status"><strong>{withoutCamera ? copy.timerVoiceDescription : statusCopy}</strong><span>{cameraMessage(cameraSnapshot)}</span>{!withoutCamera && cameraSnapshot.state === "ready" && isSetup ? <span className="guided-region-help">{copy.adjustDripperHint}</span> : null}</p>
         {!withoutCamera && cameraSnapshot.state === "ready" && isSetup && !snapshot.positioning.placementConfirmed
           ? <button className="secondary-button guided-full-button" type="button" onClick={() => session.confirmDripperPlacement()}>Dripper is inside the guide</button>
           : null}

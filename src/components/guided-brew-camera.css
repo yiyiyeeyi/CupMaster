@@ -1,0 +1,30 @@
+.guided-dripper-region {
+  box-sizing: border-box;
+  cursor: move;
+  min-height: 20%;
+  min-width: 20%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.guided-region-resize {
+  align-items: center;
+  background: #f5c451;
+  border: 2px solid #171411;
+  border-radius: 50%;
+  bottom: -14px;
+  color: #171411;
+  display: grid;
+  font: 700 14px/1 var(--ui);
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: -14px;
+  touch-action: none;
+  width: 28px;
+}
+
+.guided-position-copy .guided-region-help {
+  color: var(--ink);
+}
